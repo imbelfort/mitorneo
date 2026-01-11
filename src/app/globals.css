@@ -22,5 +22,40 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans);
+  text-rendering: optimizeLegibility;
+}
+
+@keyframes admin-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes admin-glow {
+  0% {
+    opacity: 0.45;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 0.7;
+    transform: translateY(-8px);
+  }
+  100% {
+    opacity: 0.45;
+    transform: translateY(0);
+  }
+}
+
+.admin-fade-up {
+  animation: admin-fade-up 0.55s ease-out both;
+}
+
+.admin-glow {
+  animation: admin-glow 9s ease-in-out infinite;
 }

@@ -1,0 +1,1318 @@
+"use client";
+
+import TournamentDraws from "@/components/tournaments/tournament-draws";
+import TournamentFixture from "@/components/tournaments/tournament-fixture";
+import TournamentPlayoffs from "@/components/tournaments/tournament-playoffs";
+import TournamentSchedule from "@/components/tournaments/tournament-schedule";
+import TournamentScores from "@/components/tournaments/tournament-scores";
+import TournamentPrizes from "@/components/tournaments/tournament-prizes";
+import TournamentRegistrations from "@/components/tournaments/tournament-registrations";
+import { useMemo, useState } from "react";
+
+type League = {
+  id: string;
+  name: string;
+};
+
+type Sport = {
+  id: string;
+  name: string;
+};
+
+type CategoryModality = "SINGLES" | "DOUBLES";
+type CategoryGender = "MALE" | "FEMALE" | "MIXED";
+
+type Category = {
+  id: string;
+  name: string;
+  abbreviation: string;
+  modality?: CategoryModality | null;
+  gender?: CategoryGender | null;
+  sport?: { id: string; name: string } | null;
+};
+
+type TournamentCategory = {
+  categoryId: string;
+  category: Category;
+  price: string | number;
+  secondaryPrice: string | number;
+  siblingPrice: string | number;
+};
+
+type TournamentClub = {
+  id: string;
+  name: string;
+  address: string | null;
+  courtsCount?: number | null;
+};
+
+type Tournament = {
+  id: string;
+  name: string;
+  sportId: string | null;
+  address: string | null;
+  rankingEnabled: boolean;
+  leagueId: string | null;
+  league?: League | null;
+  startDate: string | Date | null;
+  endDate: string | Date | null;
+  registrationDeadline: string | Date | null;
+  rulesText: string | null;
+  playDays: string[] | null;
+  clubs: TournamentClub[];
+  categories: TournamentCategory[];
+};
+
+type ClubForm = {
+  name: string;
+  address: string;
+  courtsCount: string;
+};
+
+type Props = {
+  leagues: League[];
+  sports: Sport[];
+  categories: Category[];
+  initialTournaments: Tournament[];
+};
+
+const createEmptyClub = (): ClubForm => ({ name: "", address: "", courtsCount: "1" });
+
+const toISODate = (value: string | Date | null | undefined) => {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().split("T")[0];
+};
+
+const isDateOnly = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+const normalizePlayDays = (value?: string[] | null) => {
+  const dates = Array.isArray(value) ? value.filter((date) => isDateOnly(date)) : [];
+  return dates.length ? dates : [""];
+};
+
+const parsePriceInput = (value?: string) => {
+  if (!value) return null;
+  const normalized = value.trim().replace(",", ".");
+  if (!/^\d+(\.\d{1,2})?$/.test(normalized)) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const normalizePriceInput = (value: string) => value.trim().replace(",", ".");
+
+const formatPriceInput = (value: unknown) => {
+  if (typeof value === "number" && Number.isFinite(value)) return value.toString();
+  if (typeof value === "string") return value;
+  return "";
+};
+
+const parseCourtsCountInput = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (!/^\d+$/.test(trimmed)) return null;
+  const parsed = Number.parseInt(trimmed, 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return null;
+  return parsed;
+};
+
+export default function TournamentsManager({
+  leagues,
+  sports,
+  categories,
+  initialTournaments,
+}: Props) {
+  const [tournaments, setTournaments] = useState<Tournament[]>(initialTournaments);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [currentStep, setCurrentStep] = useState<
+    1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+  >(1);
+  const [activeTournamentId, setActiveTournamentId] = useState<string | null>(null);
+  const [activeTournamentName, setActiveTournamentName] = useState<string>("");
+  const [form, setForm] = useState({
+    name: "",
+    sportId: sports[0]?.id ?? "",
+    leagueId: leagues[0]?.id ?? "",
+    rankingEnabled: true,
+    address: "",
+    startDate: "",
+    endDate: "",
+    registrationDeadline: "",
+    rulesText: "",
+    playDays: [""],
+    clubs: [createEmptyClub()],
+  });
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<string>>(new Set());
+  const [categoryPrices, setCategoryPrices] = useState<Record<string, string>>({});
+  const [categorySecondaryPrices, setCategorySecondaryPrices] = useState<
+    Record<string, string>
+  >({});
+  const [categorySiblingPrices, setCategorySiblingPrices] = useState<
+    Record<string, string>
+  >({});
+  const [noEndDate, setNoEndDate] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const canSubmit = useMemo(() => {
+    if (!form.name.trim()) return false;
+    if (!form.sportId) return false;
+    if (form.rankingEnabled && !form.leagueId) return false;
+    if (!form.startDate || !form.registrationDeadline) return false;
+    if (!noEndDate && !form.endDate) return false;
+    if (!noEndDate && form.endDate < form.startDate) return false;
+    const validPlayDates = form.playDays.filter((date) => isDateOnly(date));
+    if (validPlayDates.length === 0) return false;
+    const hasOutOfRange = validPlayDates.some((date) => {
+      if (date < form.startDate) return true;
+      if (!noEndDate && form.endDate && date > form.endDate) return true;
+      return false;
+    });
+    if (hasOutOfRange) return false;
+    if (selectedCategoryIds.size === 0) return false;
+    for (const categoryId of selectedCategoryIds) {
+      const parsed = parsePriceInput(categoryPrices[categoryId]);
+      if (parsed === null || parsed < 0) return false;
+      const parsedSecondary = parsePriceInput(categorySecondaryPrices[categoryId]);
+      if (parsedSecondary === null || parsedSecondary < 0) return false;
+      const parsedSibling = parsePriceInput(categorySiblingPrices[categoryId]);
+      if (parsedSibling === null || parsedSibling < 0) return false;
+    }
+    const validClubs = form.clubs.filter((club) => club.name.trim().length >= 2);
+    if (validClubs.length === 0) return false;
+    const hasInvalidCourts = validClubs.some(
+      (club) => parseCourtsCountInput(club.courtsCount) === null
+    );
+    if (hasInvalidCourts) return false;
+    return true;
+  }, [
+    form,
+    noEndDate,
+    selectedCategoryIds,
+    categoryPrices,
+    categorySecondaryPrices,
+    categorySiblingPrices,
+  ]);
+
+  const resetForm = () => {
+    setForm({
+      name: "",
+      sportId: sports[0]?.id ?? "",
+      leagueId: leagues[0]?.id ?? "",
+      rankingEnabled: true,
+      address: "",
+      startDate: "",
+      endDate: "",
+      registrationDeadline: "",
+      rulesText: "",
+      playDays: [""],
+      clubs: [createEmptyClub()],
+    });
+    setSelectedCategoryIds(new Set());
+    setCategoryPrices({});
+    setCategorySecondaryPrices({});
+    setCategorySiblingPrices({});
+    setNoEndDate(true);
+    setEditingId(null);
+    setActiveTournamentId(null);
+    setActiveTournamentName("");
+    setCurrentStep(1);
+  };
+
+  const refreshTournaments = async () => {
+    const res = await fetch("/api/tournaments", { cache: "no-store" });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && Array.isArray(data.tournaments)) {
+      setTournaments(data.tournaments);
+    }
+  };
+
+  const updateClub = (index: number, field: keyof ClubForm, value: string) => {
+    setForm((prev) => {
+      const clubs = [...prev.clubs];
+      clubs[index] = { ...clubs[index], [field]: value };
+      return { ...prev, clubs };
+    });
+  };
+
+  const addClub = () => {
+    setForm((prev) => ({ ...prev, clubs: [...prev.clubs, createEmptyClub()] }));
+  };
+
+  const removeClub = (index: number) => {
+    setForm((prev) => {
+      const clubs = prev.clubs.filter((_, idx) => idx !== index);
+      return { ...prev, clubs: clubs.length ? clubs : [createEmptyClub()] };
+    });
+  };
+
+  const addPlayDate = () => {
+    setForm((prev) => ({ ...prev, playDays: [...prev.playDays, ""] }));
+  };
+
+  const handleSportChange = (sportId: string) => {
+    setForm((prev) => ({ ...prev, sportId }));
+    setSelectedCategoryIds(new Set());
+    setCategoryPrices({});
+    setCategorySecondaryPrices({});
+    setCategorySiblingPrices({});
+  };
+
+  const updatePlayDate = (index: number, value: string) => {
+    setForm((prev) => {
+      const playDays = [...prev.playDays];
+      playDays[index] = value;
+      return { ...prev, playDays };
+    });
+  };
+
+  const removePlayDate = (index: number) => {
+    setForm((prev) => {
+      const playDays = prev.playDays.filter((_, idx) => idx !== index);
+      return { ...prev, playDays: playDays.length ? playDays : [""] };
+    });
+  };
+
+  const toggleCategory = (categoryId: string) => {
+    const wasSelected = selectedCategoryIds.has(categoryId);
+    setSelectedCategoryIds((prev) => {
+      const next = new Set(prev);
+      if (wasSelected) {
+        next.delete(categoryId);
+      } else {
+        next.add(categoryId);
+      }
+      return next;
+    });
+    setCategoryPrices((prev) => {
+      const next = { ...prev };
+      if (wasSelected) {
+        delete next[categoryId];
+      } else if (next[categoryId] === undefined) {
+        next[categoryId] = "";
+      }
+      return next;
+    });
+    setCategorySecondaryPrices((prev) => {
+      const next = { ...prev };
+      if (wasSelected) {
+        delete next[categoryId];
+      } else if (next[categoryId] === undefined) {
+        next[categoryId] = "";
+      }
+      return next;
+    });
+    setCategorySiblingPrices((prev) => {
+      const next = { ...prev };
+      if (wasSelected) {
+        delete next[categoryId];
+      } else if (next[categoryId] === undefined) {
+        next[categoryId] = "";
+      }
+      return next;
+    });
+  };
+
+  const updateCategoryPrice = (categoryId: string, value: string) => {
+    setCategoryPrices((prev) => ({ ...prev, [categoryId]: value }));
+    setCategorySecondaryPrices((prev) => {
+      const current = prev[categoryId];
+      if (current === undefined || current.trim() === "") {
+        return { ...prev, [categoryId]: value };
+      }
+      return prev;
+    });
+    setCategorySiblingPrices((prev) => {
+      const current = prev[categoryId];
+      if (current === undefined || current.trim() === "") {
+        return { ...prev, [categoryId]: value };
+      }
+      return prev;
+    });
+  };
+
+  const updateCategorySecondaryPrice = (categoryId: string, value: string) => {
+    setCategorySecondaryPrices((prev) => ({ ...prev, [categoryId]: value }));
+  };
+
+  const updateCategorySiblingPrice = (categoryId: string, value: string) => {
+    setCategorySiblingPrices((prev) => ({ ...prev, [categoryId]: value }));
+  };
+
+  const startEditing = (tournament: Tournament) => {
+    const fallbackSportId =
+      tournament.sportId ??
+      tournament.categories[0]?.category?.sport?.id ??
+      sports[0]?.id ??
+      "";
+    const validTournamentCategories = tournament.categories.filter(
+      (item) => (item.category?.sport?.id ?? "") === fallbackSportId
+    );
+    setEditingId(tournament.id);
+    setActiveTournamentId(tournament.id);
+    setActiveTournamentName(tournament.name);
+    setCurrentStep(1);
+    setForm({
+      name: tournament.name,
+      sportId: fallbackSportId,
+      leagueId: tournament.leagueId ?? "",
+      rankingEnabled: tournament.rankingEnabled ?? true,
+      address: tournament.address ?? "",
+      startDate: toISODate(tournament.startDate),
+      endDate: toISODate(tournament.endDate),
+      registrationDeadline: toISODate(tournament.registrationDeadline),
+      rulesText: tournament.rulesText ?? "",
+      playDays: normalizePlayDays(tournament.playDays),
+      clubs: tournament.clubs.length
+        ? tournament.clubs.map((club) => ({
+            name: club.name,
+            address: club.address ?? "",
+            courtsCount:
+              typeof club.courtsCount === "number" && Number.isFinite(club.courtsCount)
+                ? String(club.courtsCount)
+                : "1",
+          }))
+        : [createEmptyClub()],
+    });
+    setSelectedCategoryIds(new Set(validTournamentCategories.map((item) => item.categoryId)));
+    setCategoryPrices(() => {
+      const prices: Record<string, string> = {};
+      for (const item of validTournamentCategories) {
+        prices[item.categoryId] = formatPriceInput(item.price);
+      }
+      return prices;
+    });
+    setCategorySecondaryPrices(() => {
+      const prices: Record<string, string> = {};
+      for (const item of validTournamentCategories) {
+        prices[item.categoryId] = formatPriceInput(item.secondaryPrice);
+      }
+      return prices;
+    });
+    setCategorySiblingPrices(() => {
+      const prices: Record<string, string> = {};
+      for (const item of validTournamentCategories) {
+        prices[item.categoryId] = formatPriceInput(item.siblingPrice);
+      }
+      return prices;
+    });
+    setNoEndDate(!tournament.endDate);
+    setError(null);
+    setMessage("Editando torneo");
+  };
+
+  const handleDelete = async (tournament: Tournament) => {
+    const confirmed = window.confirm(
+      `Eliminar el torneo "${tournament.name}"? Esta accion no se puede deshacer.`
+    );
+    if (!confirmed) return;
+
+    setLoading(true);
+    setError(null);
+    setMessage(null);
+
+    const res = await fetch(`/api/tournaments/${tournament.id}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    const data = await res.json().catch(() => ({}));
+    setLoading(false);
+
+    if (!res.ok) {
+      const detail = data?.detail ? ` (${data.detail})` : "";
+      setError(`${data?.error ?? "No se pudo eliminar el torneo"}${detail}`);
+      return;
+    }
+
+    if (editingId === tournament.id || activeTournamentId === tournament.id) {
+      resetForm();
+    }
+    await refreshTournaments();
+    setMessage("Torneo eliminado");
+  };
+
+  const saveTournament = async () => {
+    const isEditing = Boolean(editingId);
+    setError(null);
+    setMessage(null);
+    setLoading(true);
+
+    const normalizedPlayDays = form.playDays.filter((date) => isDateOnly(date));
+
+    const payload = {
+      name: form.name,
+      sportId: form.sportId,
+      leagueId: form.leagueId,
+      rankingEnabled: form.rankingEnabled,
+      address: form.address || null,
+      startDate: form.startDate,
+      endDate: noEndDate ? null : form.endDate || null,
+      registrationDeadline: form.registrationDeadline,
+      rulesText: form.rulesText || null,
+      playDays: normalizedPlayDays,
+      categoryEntries: Array.from(selectedCategoryIds).map((categoryId) => ({
+        categoryId,
+        price: normalizePriceInput(categoryPrices[categoryId] ?? ""),
+        secondaryPrice: normalizePriceInput(categorySecondaryPrices[categoryId] ?? ""),
+        siblingPrice: normalizePriceInput(categorySiblingPrices[categoryId] ?? ""),
+      })),
+      clubs: form.clubs.map((club) => ({
+        name: club.name,
+        address: club.address || null,
+        courtsCount: parseCourtsCountInput(club.courtsCount) ?? 1,
+      })),
+    };
+
+    const endpoint = isEditing ? `/api/tournaments/${editingId}` : "/api/tournaments";
+    const method = isEditing ? "PATCH" : "POST";
+
+    const res = await fetch(endpoint, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    setLoading(false);
+
+    if (!res.ok) {
+      const detail = data?.detail ? ` (${data.detail})` : "";
+      const fallback = isEditing
+        ? "No se pudo actualizar el torneo"
+        : "No se pudo crear el torneo";
+      setError(`${data?.error ?? fallback}${detail}`);
+      return null;
+    }
+
+    const savedTournament = data?.tournament ?? null;
+    const savedId = savedTournament?.id ?? editingId ?? null;
+    if (savedId) {
+      setEditingId(savedId);
+      setActiveTournamentId(savedId);
+      setActiveTournamentName(savedTournament?.name ?? form.name);
+    }
+
+    await refreshTournaments();
+    setMessage(isEditing ? "Torneo actualizado" : "Torneo creado");
+    return savedId ? { id: savedId, name: savedTournament?.name ?? form.name } : null;
+  };
+
+  const handleNext = async () => {
+    const saved = await saveTournament();
+    if (!saved) return;
+    setCurrentStep(2);
+  };
+
+  const sortedTournaments = useMemo(
+    () => [...tournaments].sort((a, b) => a.name.localeCompare(b.name)),
+    [tournaments]
+  );
+
+  const filteredCategories = useMemo(() => {
+    if (!form.sportId) return [];
+    return categories.filter((category) => category.sport?.id === form.sportId);
+  }, [categories, form.sportId]);
+
+  const selectedCategories = useMemo(
+    () => filteredCategories.filter((category) => selectedCategoryIds.has(category.id)),
+    [filteredCategories, selectedCategoryIds]
+  );
+
+  const registrationCategories = useMemo(
+    () =>
+      selectedCategories.map((category) => ({
+        ...category,
+        price: categoryPrices[category.id] ?? "0.00",
+        secondaryPrice:
+          categorySecondaryPrices[category.id] ??
+          categoryPrices[category.id] ??
+          "0.00",
+        siblingPrice:
+          categorySiblingPrices[category.id] ??
+          categoryPrices[category.id] ??
+          "0.00",
+      })),
+    [selectedCategories, categoryPrices, categorySecondaryPrices, categorySiblingPrices]
+  );
+
+  const stepTwoEnabled = Boolean(activeTournamentId);
+  const stepThreeEnabled = Boolean(activeTournamentId);
+  const stepFourEnabled = Boolean(activeTournamentId);
+  const stepFiveEnabled = Boolean(activeTournamentId);
+  const stepSixEnabled = Boolean(activeTournamentId);
+  const stepSevenEnabled = Boolean(activeTournamentId);
+  const stepEightEnabled = Boolean(activeTournamentId);
+
+  return (
+    <div className="space-y-8">
+      <div className="admin-fade-up relative overflow-hidden rounded-[24px] border border-white/70 bg-white/80 p-4 shadow-[0_18px_50px_-40px_rgba(15,23,42,0.3)] ring-1 ring-slate-200/70 backdrop-blur">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-indigo-300/70 via-sky-300/60 to-amber-200/70" />
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCurrentStep(1)}
+            className={`rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] transition ${
+              currentStep === 1
+                ? "bg-slate-900 text-white shadow-[0_12px_30px_-18px_rgba(15,23,42,0.45)]"
+                : "border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+            }`}
+          >
+            Paso 1 - Configuracion
+          </button>
+          <button
+            type="button"
+            onClick={() => setCurrentStep(2)}
+            disabled={!stepTwoEnabled}
+            className={`rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] transition ${
+              stepTwoEnabled
+                ? currentStep === 2
+                  ? "bg-slate-900 text-white shadow-[0_12px_30px_-18px_rgba(15,23,42,0.45)]"
+                  : "border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                : "cursor-not-allowed border border-slate-200 text-slate-400"
+            }`}
+          >
+            Paso 2 - Inscripcion
+          </button>
+          <button
+            type="button"
+            onClick={() => setCurrentStep(3)}
+            disabled={!stepThreeEnabled}
+            className={`rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] transition ${
+              stepThreeEnabled
+                ? currentStep === 3
+                  ? "bg-slate-900 text-white shadow-[0_12px_30px_-18px_rgba(15,23,42,0.45)]"
+                  : "border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                : "cursor-not-allowed border border-slate-200 text-slate-400"
+            }`}
+          >
+            Paso 3 - Premios
+          </button>
+          <button
+            type="button"
+            onClick={() => setCurrentStep(4)}
+            disabled={!stepFourEnabled}
+            className={`rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] transition ${
+              stepFourEnabled
+                ? currentStep === 4
+                  ? "bg-slate-900 text-white shadow-[0_12px_30px_-18px_rgba(15,23,42,0.45)]"
+                  : "border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                : "cursor-not-allowed border border-slate-200 text-slate-400"
+            }`}
+          >
+            Paso 4 - Sorteo
+          </button>
+          <button
+            type="button"
+            onClick={() => setCurrentStep(5)}
+            disabled={!stepFiveEnabled}
+            className={`rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] transition ${
+              stepFiveEnabled
+                ? currentStep === 5
+                  ? "bg-slate-900 text-white shadow-[0_12px_30px_-18px_rgba(15,23,42,0.45)]"
+                  : "border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                : "cursor-not-allowed border border-slate-200 text-slate-400"
+            }`}
+          >
+            Paso 5 - Sembrado de grupo
+          </button>
+          <button
+            type="button"
+            onClick={() => setCurrentStep(6)}
+            disabled={!stepSixEnabled}
+            className={`rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] transition ${
+              stepSixEnabled
+                ? currentStep === 6
+                  ? "bg-slate-900 text-white shadow-[0_12px_30px_-18px_rgba(15,23,42,0.45)]"
+                  : "border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                : "cursor-not-allowed border border-slate-200 text-slate-400"
+            }`}
+          >
+            Paso 6 - Calendario
+          </button>
+          <button
+            type="button"
+            onClick={() => setCurrentStep(7)}
+            disabled={!stepSevenEnabled}
+            className={`rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] transition ${
+              stepSevenEnabled
+                ? currentStep === 7
+                  ? "bg-slate-900 text-white shadow-[0_12px_30px_-18px_rgba(15,23,42,0.45)]"
+                  : "border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                : "cursor-not-allowed border border-slate-200 text-slate-400"
+            }`}
+          >
+            Paso 7 - Posiciones
+          </button>
+          <button
+            type="button"
+            onClick={() => setCurrentStep(8)}
+            disabled={!stepEightEnabled}
+            className={`rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] transition ${
+              stepEightEnabled
+                ? currentStep === 8
+                  ? "bg-slate-900 text-white shadow-[0_12px_30px_-18px_rgba(15,23,42,0.45)]"
+                  : "border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                : "cursor-not-allowed border border-slate-200 text-slate-400"
+            }`}
+          >
+            Paso 8 - Playoff
+          </button>
+        </div>
+        {stepTwoEnabled ? (
+          <p className="mt-2 text-xs text-slate-500">
+            Torneo activo: {activeTournamentName || form.name}
+          </p>
+        ) : (
+          <p className="mt-2 text-xs text-slate-500">
+            Guarda el torneo para habilitar la inscripcion.
+          </p>
+        )}
+      </div>
+
+      {currentStep === 1 ? (
+        <>
+      <div className="admin-fade-up relative overflow-hidden rounded-[28px] border border-white/70 bg-white/80 p-6 shadow-[0_24px_70px_-50px_rgba(15,23,42,0.35)] ring-1 ring-slate-200/70 backdrop-blur">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-indigo-300/70 via-sky-300/60 to-amber-200/70" />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-indigo-500">
+              Paso 1
+            </p>
+            <h2 className="text-2xl font-semibold text-slate-900">
+              {editingId ? "Editar torneo" : "Crear torneo"}
+            </h2>
+            <p className="text-sm text-slate-600">
+              Completa los datos del torneo en un solo formulario.
+            </p>
+          </div>
+          {editingId && (
+            <button
+              type="button"
+              onClick={resetForm}
+              className="rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-white"
+            >
+              Cancelar edicion
+            </button>
+          )}
+        </div>
+
+        <div className="mt-6 space-y-8">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">
+                Nombre del torneo
+              </label>
+              <input
+                value={form.name}
+                onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                placeholder="Ej. Open La Paz 2025"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Deporte</label>
+              <select
+                value={form.sportId}
+                onChange={(e) => handleSportChange(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              >
+                <option value="">Selecciona deporte</option>
+                {sports.map((sport) => (
+                  <option key={sport.id} value={sport.id}>
+                    {sport.name}
+                  </option>
+                ))}
+              </select>
+              {sports.length === 0 && (
+                <p className="text-xs text-slate-500">
+                  Primero crea un deporte para poder continuar.
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm font-medium text-slate-700">
+                  Liga para ranking
+                </label>
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={!form.rankingEnabled}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        rankingEnabled: !e.target.checked,
+                        leagueId: e.target.checked ? "" : prev.leagueId,
+                      }))
+                    }
+                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  Torneo sin ranking
+                </label>
+              </div>
+              <select
+                value={form.leagueId}
+                onChange={(e) => setForm((prev) => ({ ...prev, leagueId: e.target.value }))}
+                disabled={!form.rankingEnabled}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:bg-slate-100"
+              >
+                <option value="">Selecciona liga</option>
+                {leagues.map((league) => (
+                  <option key={league.id} value={league.id}>
+                    {league.name}
+                  </option>
+                ))}
+              </select>
+              {form.rankingEnabled && leagues.length === 0 && (
+                <p className="text-xs text-slate-500">
+                  Primero crea una liga para poder asignar el ranking.
+                </p>
+              )}
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-medium text-slate-700">
+                Direccion del torneo
+              </label>
+              <input
+                value={form.address}
+                onChange={(e) => setForm((prev) => ({ ...prev, address: e.target.value }))}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                placeholder="Ej. Av. Principal #123"
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">
+                Fecha de inicio
+              </label>
+              <input
+                type="date"
+                value={form.startDate}
+                onChange={(e) => setForm((prev) => ({ ...prev, startDate: e.target.value }))}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm font-medium text-slate-700">
+                  Fecha de fin
+                </label>
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={noEndDate}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setNoEndDate(checked);
+                      if (checked) {
+                        setForm((prev) => ({ ...prev, endDate: "" }));
+                      }
+                    }}
+                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  Sin fecha de fin
+                </label>
+              </div>
+              <input
+                type="date"
+                value={form.endDate}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setForm((prev) => ({ ...prev, endDate: value }));
+                  if (value) setNoEndDate(false);
+                }}
+                disabled={noEndDate}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:bg-slate-100"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">
+                Cierre de inscripcion
+              </label>
+              <input
+                type="date"
+                value={form.registrationDeadline}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, registrationDeadline: e.target.value }))
+                }
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-medium text-slate-700">Reglas</label>
+              <textarea
+                value={form.rulesText}
+                onChange={(e) => setForm((prev) => ({ ...prev, rulesText: e.target.value }))}
+                className="min-h-[120px] w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                placeholder="Escribe las reglas del torneo..."
+              />
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200/70 bg-slate-50/80 p-5 shadow-[0_12px_32px_-24px_rgba(15,23,42,0.25)]">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Fechas de juego</h3>
+                <p className="text-sm text-slate-600">
+                  Agrega las fechas exactas (dia/mes/ano) dentro del rango de inicio
+                  y fin del torneo.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={addPlayDate}
+                className="inline-flex items-center justify-center rounded-full border border-indigo-200/80 bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-700 shadow-sm transition hover:bg-indigo-50"
+              >
+                + Agregar fecha
+              </button>
+            </div>
+            <div className="mt-4 space-y-3">
+              {form.playDays.map((date, index) => (
+                <div key={`play-date-${index}`} className="flex flex-wrap gap-3">
+                  <input
+                    type="date"
+                    value={date}
+                    onChange={(e) => updatePlayDate(index, e.target.value)}
+                    min={form.startDate || undefined}
+                    max={!noEndDate && form.endDate ? form.endDate : undefined}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 sm:max-w-xs"
+                  />
+                  {form.playDays.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removePlayDate(index)}
+                      className="text-xs font-semibold text-red-600 transition hover:text-red-700"
+                    >
+                      Quitar
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200/70 bg-slate-50/80 p-5 shadow-[0_12px_32px_-24px_rgba(15,23,42,0.25)]">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">
+                  Clubes / complejos
+                </h3>
+                <p className="text-sm text-slate-600">
+                  Agrega los complejos deportivos que usara el torneo.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={addClub}
+                className="inline-flex items-center justify-center rounded-full border border-indigo-200/80 bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-700 shadow-sm transition hover:bg-indigo-50"
+              >
+                + Agregar club
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              {form.clubs.map((club, index) => (
+                <div
+                  key={`club-${index}`}
+                  className="rounded-2xl border border-slate-200/70 bg-white/90 p-4 shadow-[0_8px_20px_-18px_rgba(15,23,42,0.2)]"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-slate-800">
+                      Club {index + 1}
+                    </p>
+                    {form.clubs.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeClub(index)}
+                        className="text-xs font-semibold text-red-600 transition hover:text-red-700"
+                      >
+                        Quitar
+                      </button>
+                    )}
+                  </div>
+                  <div className="mt-3 grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">
+                        Nombre del complejo
+                      </label>
+                      <input
+                        value={club.name}
+                        onChange={(e) => updateClub(index, "name", e.target.value)}
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                        placeholder="Ej. Complejo Central"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">
+                        Canchas habilitadas
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={club.courtsCount}
+                        onChange={(e) =>
+                          updateClub(index, "courtsCount", e.target.value)
+                        }
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                        placeholder="Ej. 6"
+                      />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-sm font-medium text-slate-700">
+                        Direccion
+                      </label>
+                      <input
+                        value={club.address}
+                        onChange={(e) => updateClub(index, "address", e.target.value)}
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                        placeholder="Ej. Calle 8, Zona Sur"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200/70 bg-slate-50/80 p-5 shadow-[0_12px_32px_-24px_rgba(15,23,42,0.25)]">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Categorias</h3>
+                <p className="text-sm text-slate-600">
+                  Selecciona las categorias que se jugaran en este torneo.
+                </p>
+              </div>
+              <span className="text-xs font-semibold text-slate-500">
+                {selectedCategoryIds.size} seleccionadas
+              </span>
+            </div>
+
+            {filteredCategories.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-500">
+                {form.sportId
+                  ? "No hay categorias para este deporte."
+                  : "Selecciona un deporte para ver categorias."}
+              </p>
+            ) : (
+              <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200/70 bg-white/80 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.2)]">
+                <table className="min-w-full divide-y divide-slate-200/70 text-sm">
+                  <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.2em] text-slate-500">
+                    <tr>
+                      <th className="px-3 py-3 text-left font-semibold">Seleccion</th>
+                      <th className="px-3 py-3 text-left font-semibold">Deporte</th>
+                      <th className="px-3 py-3 text-left font-semibold">Categoria</th>
+                      <th className="px-3 py-3 text-left font-semibold">Abrev.</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredCategories.map((category) => {
+                      const selected = selectedCategoryIds.has(category.id);
+                      return (
+                        <tr
+                          key={category.id}
+                          onClick={() => toggleCategory(category.id)}
+                          className={`cursor-pointer transition ${
+                            selected ? "bg-indigo-50/70" : "hover:bg-slate-50/80"
+                          }`}
+                        >
+                          <td className="px-3 py-2">
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={() => toggleCategory(category.id)}
+                              onClick={(event) => event.stopPropagation()}
+                              className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-slate-700">
+                            {category.sport?.name ?? "N/D"}
+                          </td>
+                          <td className="px-3 py-2 font-semibold text-slate-900">
+                            {category.name}
+                          </td>
+                          <td className="px-3 py-2 text-slate-700">
+                            {category.abbreviation}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-slate-200/70 bg-slate-50/80 p-5 shadow-[0_12px_32px_-24px_rgba(15,23,42,0.25)]">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="mt-2 text-lg font-semibold text-slate-900">
+                  Precio de inscripcion por categoria
+                </h3>
+                <p className="text-sm text-slate-600">
+                  Define el costo base y el precio desde la segunda categoria por jugador.
+                </p>
+              </div>
+            </div>
+
+            {selectedCategories.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-500">
+                Selecciona categorias para asignar precios.
+              </p>
+            ) : (
+              <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200/70 bg-white/80 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.2)]">
+                <table className="min-w-full divide-y divide-slate-200/70 text-sm">
+                  <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.2em] text-slate-500">
+                    <tr>
+                      <th className="px-3 py-3 text-left font-semibold">Deporte</th>
+                      <th className="px-3 py-3 text-left font-semibold">Categoria</th>
+                      <th className="px-3 py-3 text-left font-semibold">
+                        Precio 1
+                      </th>
+                      <th className="px-3 py-3 text-left font-semibold">
+                        Precio 2+
+                      </th>
+                      <th className="px-3 py-3 text-left font-semibold">
+                        Precio hermano
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {selectedCategories.map((category) => (
+                      <tr key={`price-${category.id}`}>
+                        <td className="px-3 py-2 text-slate-700">
+                          {category.sport?.name ?? "N/D"}
+                        </td>
+                        <td className="px-3 py-2 font-semibold text-slate-900">
+                          {category.name}
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-slate-500">
+                              Bs
+                            </span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={categoryPrices[category.id] ?? ""}
+                              onChange={(e) =>
+                                updateCategoryPrice(category.id, e.target.value)
+                              }
+                              className="w-full max-w-[140px] rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                              placeholder="0.00"
+                            />
+                          </div>
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-slate-500">
+                              Bs
+                            </span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={categorySecondaryPrices[category.id] ?? ""}
+                              onChange={(e) =>
+                                updateCategorySecondaryPrice(
+                                  category.id,
+                                  e.target.value
+                                )
+                              }
+                              className="w-full max-w-[140px] rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                              placeholder="0.00"
+                            />
+                          </div>
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-slate-500">
+                              Bs
+                            </span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={categorySiblingPrices[category.id] ?? ""}
+                              onChange={(e) =>
+                                updateCategorySiblingPrice(
+                                  category.id,
+                                  e.target.value
+                                )
+                              }
+                              className="w-full max-w-[140px] rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                              placeholder="0.00"
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-slate-500">
+              Completa el paso 1 para continuar con inscripciones.
+            </p>
+            <button
+              type="button"
+              onClick={handleNext}
+              disabled={!canSubmit || loading}
+              className="inline-flex items-center justify-center rounded-full bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-[0_18px_40px_-22px_rgba(15,23,42,0.5)] transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {loading ? "Guardando..." : "Siguiente"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="admin-fade-up relative overflow-hidden rounded-[24px] border border-white/70 bg-white/80 p-6 shadow-[0_20px_60px_-45px_rgba(15,23,42,0.35)] ring-1 ring-slate-200/70 backdrop-blur">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-slate-200/80 via-indigo-200/60 to-slate-200/80" />
+        <h3 className="text-lg font-semibold text-slate-900">Torneos creados</h3>
+        {sortedTournaments.length === 0 ? (
+          <p className="mt-2 text-sm text-slate-600">Aun no hay torneos.</p>
+        ) : (
+          <div className="mt-3 space-y-3">
+            {sortedTournaments.map((tournament) => (
+              <div
+                key={tournament.id}
+                className="rounded-2xl border border-slate-200/70 bg-white/80 px-4 py-3 shadow-[0_12px_30px_-22px_rgba(15,23,42,0.25)]"
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">
+                      {tournament.name}
+                    </p>
+                    <p className="text-xs text-slate-600">
+                      {tournament.rankingEnabled
+                        ? `Ranking: ${tournament.league?.name ?? "Sin liga"}`
+                        : "Torneo sin ranking"}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Inicio: {toISODate(tournament.startDate) || "N/D"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => startEditing(tournament)}
+                      className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-white"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(tournament)}
+                      className="rounded-full border border-red-200 bg-red-50/60 px-3 py-1.5 text-xs font-semibold text-red-600 shadow-sm transition hover:bg-red-50"
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {error && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+      )}
+      {message && (
+        <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+          {message}
+        </p>
+      )}
+        </>
+      ) : currentStep === 2 ? (
+        activeTournamentId ? (
+          <TournamentRegistrations
+            tournamentId={activeTournamentId}
+            tournamentName={activeTournamentName || form.name}
+            categories={registrationCategories}
+          />
+        ) : (
+          <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            Guarda el torneo para continuar con la inscripcion.
+          </p>
+        )
+      ) : currentStep === 3 ? (
+        activeTournamentId ? (
+          <TournamentPrizes
+            tournamentId={activeTournamentId}
+            tournamentName={activeTournamentName || form.name}
+            categories={selectedCategories}
+          />
+        ) : (
+          <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            Guarda el torneo para continuar con los premios.
+          </p>
+        )
+      ) : currentStep === 4 ? (
+        activeTournamentId ? (
+          <TournamentDraws
+            tournamentId={activeTournamentId}
+            tournamentName={activeTournamentName || form.name}
+          />
+        ) : (
+          <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            Guarda el torneo para continuar con el sorteo.
+          </p>
+        )
+      ) : currentStep === 5 ? (
+        activeTournamentId ? (
+          <TournamentFixture
+            tournamentId={activeTournamentId}
+            tournamentName={activeTournamentName || form.name}
+          />
+        ) : (
+          <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            Guarda el torneo para continuar con el fixture.
+          </p>
+        )
+      ) : currentStep === 6 ? (
+        activeTournamentId ? (
+          <TournamentSchedule
+            tournamentId={activeTournamentId}
+            tournamentName={activeTournamentName || form.name}
+          />
+        ) : (
+          <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            Guarda el torneo para continuar con el calendario.
+          </p>
+        )
+      ) : currentStep === 7 ? (
+        activeTournamentId ? (
+          <TournamentScores
+            tournamentId={activeTournamentId}
+            tournamentName={activeTournamentName || form.name}
+          />
+        ) : (
+          <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            Guarda el torneo para continuar con la tabla de scores.
+          </p>
+        )
+      ) : currentStep === 8 ? (
+        activeTournamentId ? (
+          <TournamentPlayoffs
+            tournamentId={activeTournamentId}
+            tournamentName={activeTournamentName || form.name}
+          />
+        ) : (
+          <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            Guarda el torneo para continuar con los playoffs.
+          </p>
+        )
+      ) : null}
+    </div>
+  );
+}
