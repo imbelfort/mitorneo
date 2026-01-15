@@ -430,6 +430,7 @@ export async function POST(
       categoryId: true,
       drawType: true,
       groupQualifiers: true,
+      hasBronzeMatch: true,
       category: { select: { name: true } },
     },
   });
@@ -526,6 +527,7 @@ export async function POST(
     roundNumber: number;
     teamAId: string | null;
     teamBId: string | null;
+    isBronzeMatch?: boolean;
   }> = [];
 
   const deleteCategoryIds: string[] = [];
@@ -592,6 +594,28 @@ export async function POST(
           teamBId: match.teamBId,
         });
       });
+      if (
+        category.hasBronzeMatch &&
+        qualifiers.length >= 4 &&
+        bracketMatches.length > 0
+      ) {
+        const finalRound = bracketMatches.reduce(
+          (max, current) => Math.max(max, current.roundNumber ?? 1),
+          0
+        );
+        if (finalRound >= 2) {
+          createEntries.push({
+            tournamentId,
+            categoryId: category.categoryId,
+            groupName: null,
+            stage: "PLAYOFF",
+            roundNumber: finalRound + 1,
+            teamAId: null,
+            teamBId: null,
+            isBronzeMatch: true,
+          });
+        }
+      }
       return;
     }
 
@@ -625,6 +649,28 @@ export async function POST(
         teamBId: match.teamBId,
       });
     });
+    if (
+      category.hasBronzeMatch &&
+      ordered.length >= 4 &&
+      bracketMatches.length > 0
+    ) {
+      const finalRound = bracketMatches.reduce(
+        (max, current) => Math.max(max, current.roundNumber ?? 1),
+        0
+      );
+      if (finalRound >= 2) {
+        createEntries.push({
+          tournamentId,
+          categoryId: category.categoryId,
+          groupName: null,
+          stage: "PLAYOFF",
+          roundNumber: finalRound + 1,
+          teamAId: null,
+          teamBId: null,
+          isBronzeMatch: true,
+        });
+      }
+    }
   });
 
   if (deleteCategoryIds.length > 0) {

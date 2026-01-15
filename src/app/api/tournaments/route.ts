@@ -416,6 +416,14 @@ export async function POST(request: Request) {
       ? rulesText.trim()
       : null;
 
+  const settings =
+    (await prisma.globalSetting.findUnique({
+      where: { id: "default" },
+    })) ??
+    (await prisma.globalSetting.create({
+      data: { id: "default", paymentRateDefault: 0 },
+    }));
+
   try {
     const tournament = await prisma.tournament.create({
       data: {
@@ -424,6 +432,7 @@ export async function POST(request: Request) {
         leagueId: leagueIdValue,
         address: addressValue,
         rankingEnabled: rankingEnabledValue,
+        paymentRate: settings.paymentRateDefault,
         startDate: start,
         endDate: end,
         registrationDeadline: registration,

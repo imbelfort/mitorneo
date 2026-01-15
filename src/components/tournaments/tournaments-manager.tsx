@@ -5,9 +5,10 @@ import TournamentFixture from "@/components/tournaments/tournament-fixture";
 import TournamentPlayoffs from "@/components/tournaments/tournament-playoffs";
 import TournamentSchedule from "@/components/tournaments/tournament-schedule";
 import TournamentScores from "@/components/tournaments/tournament-scores";
+import TournamentFinalStandings from "@/components/tournaments/tournament-final-standings";
 import TournamentPrizes from "@/components/tournaments/tournament-prizes";
 import TournamentRegistrations from "@/components/tournaments/tournament-registrations";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type League = {
   id: string;
@@ -52,6 +53,8 @@ type Tournament = {
   sportId: string | null;
   address: string | null;
   rankingEnabled: boolean;
+  status: "WAITING" | "ACTIVE" | "FINISHED";
+  paymentRate: string;
   leagueId: string | null;
   league?: League | null;
   startDate: string | Date | null;
@@ -74,6 +77,7 @@ type Props = {
   sports: Sport[];
   categories: Category[];
   initialTournaments: Tournament[];
+  isAdmin: boolean;
 };
 
 const createEmptyClub = (): ClubForm => ({ name: "", address: "", courtsCount: "1" });
@@ -117,19 +121,47 @@ const parseCourtsCountInput = (value: string) => {
   return parsed;
 };
 
+const countRegistrationPlayers = (registration: {
+  player?: unknown;
+  partner?: unknown;
+  partnerTwo?: unknown;
+}) => {
+  let count = 0;
+  if (registration.player) count += 1;
+  if (registration.partner) count += 1;
+  if (registration.partnerTwo) count += 1;
+  return count;
+};
+
 export default function TournamentsManager({
   leagues,
   sports,
   categories,
   initialTournaments,
+  isAdmin,
 }: Props) {
   const [tournaments, setTournaments] = useState<Tournament[]>(initialTournaments);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<
-    1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+    1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
   >(1);
   const [activeTournamentId, setActiveTournamentId] = useState<string | null>(null);
   const [activeTournamentName, setActiveTournamentName] = useState<string>("");
+  const [activeTournamentStatus, setActiveTournamentStatus] = useState<
+    "WAITING" | "ACTIVE" | "FINISHED"
+  >("WAITING");
+  const [roundRobinComplete, setRoundRobinComplete] = useState(false);
+  const [activePaymentRate, setActivePaymentRate] = useState("0");
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentRateInput, setPaymentRateInput] = useState("0");
+  const [paymentCount, setPaymentCount] = useState(0);
+  const [loadingPayment, setLoadingPayment] = useState(false);
+  const [paymentQrUrl, setPaymentQrUrl] = useState<string | null>(null);
+  const [paymentRates, setPaymentRates] = useState<Record<string, string>>({});
+  const [statusEdits, setStatusEdits] = useState<
+    Record<string, "WAITING" | "ACTIVE" | "FINISHED">
+  >({});
+  const [savingTournamentId, setSavingTournamentId] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
     sportId: sports[0]?.id ?? "",
@@ -218,6 +250,8 @@ export default function TournamentsManager({
     setEditingId(null);
     setActiveTournamentId(null);
     setActiveTournamentName("");
+    setActiveTournamentStatus("WAITING");
+    setActivePaymentRate("0");
     setCurrentStep(1);
   };
 
@@ -225,7 +259,101 @@ export default function TournamentsManager({
     const res = await fetch("/api/tournaments", { cache: "no-store" });
     const data = await res.json().catch(() => ({}));
     if (res.ok && Array.isArray(data.tournaments)) {
-      setTournaments(data.tournaments);
+      const normalized = data.tournaments.map((tournament: Tournament) => ({
+        ...tournament,
+        paymentRate:
+          tournament.paymentRate !== undefined && tournament.paymentRate !== null
+            ? String(tournament.paymentRate)
+            : "0",
+        status: tournament.status ?? "WAITING",
+      }));
+      setTournaments(normalized);
+      if (activeTournamentId) {
+        const updated = normalized.find(
+          (item: Tournament) => item.id === activeTournamentId
+        );
+        if (updated?.status) {
+          setActiveTournamentStatus(updated.status);
+        }
+        if (updated?.paymentRate !== undefined) {
+          setActivePaymentRate(String(updated.paymentRate));
+        }
+      }
+    }
+  };
+
+  const syncActiveStatus = async () => {
+    if (!activeTournamentId) return;
+    const res = await fetch("/api/tournaments", { cache: "no-store" });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && Array.isArray(data.tournaments)) {
+      const updated = data.tournaments.find(
+        (item: Tournament) => item.id === activeTournamentId
+      );
+      if (updated?.status) {
+        setActiveTournamentStatus(updated.status);
+      }
+      if (updated?.paymentRate !== undefined) {
+        setActivePaymentRate(String(updated.paymentRate));
+      }
+    }
+  };
+
+  const normalizeMoneyInput = (value: string) => value.trim().replace(",", ".");
+
+  const saveAdminTournament = async (tournament: Tournament) => {
+    if (!isAdmin) return;
+    const nextRate = paymentRates[tournament.id] ?? tournament.paymentRate ?? "0";
+    const nextStatus = statusEdits[tournament.id] ?? tournament.status;
+    const rateChanged = String(tournament.paymentRate) !== String(nextRate);
+    const statusChanged = tournament.status !== nextStatus;
+    if (!rateChanged && !statusChanged) return;
+    setSavingTournamentId(tournament.id);
+    setError(null);
+    setMessage(null);
+    try {
+      if (rateChanged) {
+        const rateRes = await fetch(
+          `/api/tournaments/${tournament.id}/payment`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ paymentRate: normalizeMoneyInput(nextRate) }),
+          }
+        );
+        const rateData = await rateRes.json().catch(() => ({}));
+        if (!rateRes.ok) {
+          const detail = rateData?.detail ? ` (${rateData.detail})` : "";
+          throw new Error(
+            `${rateData?.error ?? "No se pudo actualizar el monto"}${detail}`
+          );
+        }
+      }
+      if (statusChanged) {
+        const statusRes = await fetch(
+          `/api/tournaments/${tournament.id}/status`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ status: nextStatus }),
+          }
+        );
+        const statusData = await statusRes.json().catch(() => ({}));
+        if (!statusRes.ok) {
+          const detail = statusData?.detail ? ` (${statusData.detail})` : "";
+          throw new Error(
+            `${statusData?.error ?? "No se pudo actualizar el estado"}${detail}`
+          );
+        }
+      }
+      await refreshTournaments();
+      setMessage("Torneo actualizado");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo guardar");
+    } finally {
+      setSavingTournamentId(null);
     }
   };
 
@@ -353,6 +481,8 @@ export default function TournamentsManager({
     setEditingId(tournament.id);
     setActiveTournamentId(tournament.id);
     setActiveTournamentName(tournament.name);
+    setActiveTournamentStatus(tournament.status ?? "WAITING");
+    setActivePaymentRate(tournament.paymentRate ?? "0");
     setCurrentStep(1);
     setForm({
       name: tournament.name,
@@ -493,6 +623,12 @@ export default function TournamentsManager({
       setEditingId(savedId);
       setActiveTournamentId(savedId);
       setActiveTournamentName(savedTournament?.name ?? form.name);
+      if (savedTournament?.status) {
+        setActiveTournamentStatus(savedTournament.status);
+      }
+      if (savedTournament?.paymentRate !== undefined) {
+        setActivePaymentRate(String(savedTournament.paymentRate));
+      }
     }
 
     await refreshTournaments();
@@ -542,9 +678,116 @@ export default function TournamentsManager({
   const stepThreeEnabled = Boolean(activeTournamentId);
   const stepFourEnabled = Boolean(activeTournamentId);
   const stepFiveEnabled = Boolean(activeTournamentId);
-  const stepSixEnabled = Boolean(activeTournamentId);
-  const stepSevenEnabled = Boolean(activeTournamentId);
-  const stepEightEnabled = Boolean(activeTournamentId);
+  const canContinueAfterPayment =
+    activeTournamentStatus === "ACTIVE" || activeTournamentStatus === "FINISHED";
+  const stepSixEnabled = Boolean(activeTournamentId) && canContinueAfterPayment;
+  const stepSevenEnabled = Boolean(activeTournamentId) && canContinueAfterPayment;
+  const stepEightEnabled = Boolean(activeTournamentId) && canContinueAfterPayment;
+  const stepNineEnabled =
+    Boolean(activeTournamentId) &&
+    (activeTournamentStatus === "FINISHED" || roundRobinComplete);
+
+  const updateTournamentStatus = async (
+    status: "WAITING" | "ACTIVE" | "FINISHED"
+  ) => {
+    if (!activeTournamentId) return;
+    setError(null);
+    setMessage(null);
+    const res = await fetch(`/api/tournaments/${activeTournamentId}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ status }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const detail = data?.detail ? ` (${data.detail})` : "";
+      setError(`${data?.error ?? "No se pudo actualizar el estado"}${detail}`);
+      return;
+    }
+    const nextStatus = data?.tournament?.status ?? status;
+    setActiveTournamentStatus(nextStatus);
+    await refreshTournaments();
+    setMessage("Estado actualizado");
+  };
+
+  const openPaymentModal = async () => {
+    if (!activeTournamentId) return;
+    setLoadingPayment(true);
+    setError(null);
+    setMessage(null);
+    await syncActiveStatus();
+    const [registrationsRes, settingsRes] = await Promise.all([
+      fetch(`/api/tournaments/${activeTournamentId}/registrations`, {
+        cache: "no-store",
+      }),
+      fetch(`/api/settings/payment-rate`, { cache: "no-store" }),
+    ]);
+    const data = await registrationsRes.json().catch(() => ({}));
+    const settingsData = await settingsRes.json().catch(() => ({}));
+    setLoadingPayment(false);
+    if (settingsRes.ok) {
+      setPaymentQrUrl(
+        typeof settingsData.paymentQrUrl === "string" &&
+          settingsData.paymentQrUrl.trim().length > 0
+          ? settingsData.paymentQrUrl
+          : null
+      );
+    }
+    if (!registrationsRes.ok) {
+      const detail = data?.detail ? ` (${data.detail})` : "";
+      setError(`${data?.error ?? "No se pudo cargar las inscripciones"}${detail}`);
+      return;
+    }
+    const count = Array.isArray(data.registrations)
+      ? data.registrations.reduce(
+          (sum: number, registration: { player?: unknown; partner?: unknown; partnerTwo?: unknown }) =>
+            sum + countRegistrationPlayers(registration),
+          0
+        )
+      : 0;
+    setPaymentCount(count);
+    setPaymentRateInput(activePaymentRate || "0");
+    setShowPaymentModal(true);
+  };
+
+  useEffect(() => {
+    if (!activeTournamentId) return;
+    syncActiveStatus();
+  }, [activeTournamentId]);
+
+  const handlePaymentReported = () => {
+    setShowPaymentModal(false);
+    setMessage("Pago reportado. Un administrador debe activar el torneo.");
+  };
+
+  const savePaymentRate = async () => {
+    if (!activeTournamentId) return;
+    setLoadingPayment(true);
+    setError(null);
+    setMessage(null);
+    const res = await fetch(
+      `/api/tournaments/${activeTournamentId}/payment`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ paymentRate: paymentRateInput }),
+      }
+    );
+    const data = await res.json().catch(() => ({}));
+    setLoadingPayment(false);
+    if (!res.ok) {
+      const detail = data?.detail ? ` (${data.detail})` : "";
+      setError(`${data?.error ?? "No se pudo actualizar el monto"}${detail}`);
+      return;
+    }
+    const nextRate = data?.tournament?.paymentRate ?? paymentRateInput;
+    setActivePaymentRate(String(nextRate));
+    setPaymentRateInput(String(nextRate));
+    await refreshTournaments();
+    setMessage("Monto actualizado");
+  };
 
   return (
     <div className="space-y-8">
@@ -659,6 +902,20 @@ export default function TournamentsManager({
             }`}
           >
             Paso 8 - Playoff
+          </button>
+          <button
+            type="button"
+            onClick={() => setCurrentStep(9)}
+            disabled={!stepNineEnabled}
+            className={`rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] transition ${
+              stepNineEnabled
+                ? currentStep === 9
+                  ? "bg-slate-900 text-white shadow-[0_12px_30px_-18px_rgba(15,23,42,0.45)]"
+                  : "border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                : "cursor-not-allowed border border-slate-200 text-slate-400"
+            }`}
+          >
+            Paso 9 - Posiciones generales
           </button>
         </div>
         {stepTwoEnabled ? (
@@ -1170,9 +1427,77 @@ export default function TournamentsManager({
               className="inline-flex items-center justify-center rounded-full bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-[0_18px_40px_-22px_rgba(15,23,42,0.5)] transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {loading ? "Guardando..." : "Siguiente"}
+          </button>
+        </div>
+        {activeTournamentId && (
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              Estado del torneo
+            </span>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-700">
+              {activeTournamentStatus === "WAITING"
+                ? "En espera"
+                : activeTournamentStatus === "ACTIVE"
+                ? "Torneo pagado"
+                : "Finalizado"}
+            </span>
+            {isAdmin && currentStep >= 5 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => updateTournamentStatus("WAITING")}
+                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+                >
+                  Marcar en espera
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateTournamentStatus("ACTIVE")}
+                  className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700 shadow-sm transition hover:border-emerald-300"
+                >
+                  Activar torneo
+                </button>
+                {currentStep === 8 && activeTournamentStatus === "ACTIVE" && (
+                  <button
+                    type="button"
+                    onClick={() => updateTournamentStatus("FINISHED")}
+                    className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-700 shadow-sm transition hover:border-amber-300"
+                  >
+                    Terminar torneo
+                  </button>
+                )}
+              </>
+            )}
+            {!isAdmin && activeTournamentStatus === "WAITING" && currentStep >= 5 && (
+              <span className="text-xs text-amber-600">
+                Pendiente de pago. Solo el administrador general puede activarlo.
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {currentStep === 5 && activeTournamentId && (
+        <div className="admin-fade-up overflow-hidden rounded-[24px] border border-slate-200/70 bg-white/90 p-6 shadow-[0_20px_60px_-45px_rgba(15,23,42,0.35)]">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+                Pago del torneo
+              </p>
+              <p className="text-sm text-slate-600">
+                Cobro por inscrito en todas las categorias.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={openPaymentModal}
+              className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+            >
+              Ver pago
             </button>
           </div>
         </div>
+      )}
       </div>
 
       <div className="admin-fade-up relative overflow-hidden rounded-[24px] border border-white/70 bg-white/80 p-6 shadow-[0_20px_60px_-45px_rgba(15,23,42,0.35)] ring-1 ring-slate-200/70 backdrop-blur">
@@ -1218,6 +1543,16 @@ export default function TournamentsManager({
                     </button>
                   </div>
                 </div>
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">
+                    Estado:{" "}
+                    {tournament.status === "WAITING"
+                      ? "En espera"
+                      : tournament.status === "ACTIVE"
+                      ? "Torneo pagado"
+                      : "Finalizado"}
+                  </span>
+                </div>
               </div>
             ))}
           </div>
@@ -1239,6 +1574,7 @@ export default function TournamentsManager({
             tournamentId={activeTournamentId}
             tournamentName={activeTournamentName || form.name}
             categories={registrationCategories}
+            tournamentStatus={activeTournamentStatus}
           />
         ) : (
           <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
@@ -1280,39 +1616,154 @@ export default function TournamentsManager({
           </p>
         )
       ) : currentStep === 6 ? (
-        activeTournamentId ? (
+        activeTournamentId && canContinueAfterPayment ? (
           <TournamentSchedule
             tournamentId={activeTournamentId}
             tournamentName={activeTournamentName || form.name}
           />
         ) : (
           <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
-            Guarda el torneo para continuar con el calendario.
+            El torneo debe estar activo para continuar con el calendario.
           </p>
         )
       ) : currentStep === 7 ? (
-        activeTournamentId ? (
+        activeTournamentId && canContinueAfterPayment ? (
           <TournamentScores
             tournamentId={activeTournamentId}
             tournamentName={activeTournamentName || form.name}
+            onStatusChange={(status) => {
+              setActiveTournamentStatus(status);
+              refreshTournaments();
+            }}
+            onCompletionChange={(complete) => {
+              setRoundRobinComplete(complete);
+            }}
           />
         ) : (
           <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
-            Guarda el torneo para continuar con la tabla de scores.
+            El torneo debe estar activo para continuar con la tabla de scores.
           </p>
         )
       ) : currentStep === 8 ? (
-        activeTournamentId ? (
+        activeTournamentId && canContinueAfterPayment ? (
           <TournamentPlayoffs
             tournamentId={activeTournamentId}
             tournamentName={activeTournamentName || form.name}
           />
         ) : (
           <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
-            Guarda el torneo para continuar con los playoffs.
+            El torneo debe estar activo para continuar con los playoffs.
+          </p>
+        )
+      ) : currentStep === 9 ? (
+        activeTournamentId &&
+        (activeTournamentStatus === "FINISHED" || roundRobinComplete) ? (
+          <TournamentFinalStandings
+            tournamentId={activeTournamentId}
+            tournamentName={activeTournamentName || form.name}
+          />
+        ) : (
+          <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            Finaliza el torneo para ver las posiciones finales.
           </p>
         )
       ) : null}
+
+      {showPaymentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-6">
+          <div className="w-full max-w-lg rounded-3xl border border-white/60 bg-white/95 p-6 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+                  Pago del torneo
+                </p>
+                <h3 className="text-xl font-semibold text-slate-900">
+                  {activeTournamentName}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPaymentModal(false)}
+                className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
+              >
+                Cerrar
+              </button>
+            </div>
+            <div className="mt-4 space-y-4">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                <p className="text-sm text-slate-600">Jugadores inscritos</p>
+                <p className="text-2xl font-semibold text-slate-900">
+                  {loadingPayment ? "..." : paymentCount}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">
+                  Monto por jugador
+                </label>
+                <input
+                  value={paymentRateInput}
+                  onChange={(event) => setPaymentRateInput(event.target.value)}
+                  disabled={!isAdmin}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-100"
+                  placeholder="Ej. 5.00"
+                />
+              </div>
+              <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/80 p-4">
+                <p className="text-sm text-emerald-700">Total a pagar</p>
+                <p className="text-2xl font-semibold text-emerald-900">
+                  {(() => {
+                    const rate = parsePriceInput(paymentRateInput) ?? 0;
+                    return `${(rate * paymentCount).toFixed(2)} Bs`;
+                  })()}
+                </p>
+              </div>
+              {paymentQrUrl && (
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-sm text-slate-600">QR de pago</p>
+                  <div className="mt-3 flex h-40 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50">
+                    <img
+                      src={paymentQrUrl}
+                      alt="QR de pago"
+                      className="max-h-36 object-contain"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
+              {!isAdmin && (
+                <button
+                  type="button"
+                  onClick={handlePaymentReported}
+                  className="rounded-full bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-700"
+                >
+                  Pago realizada
+                </button>
+              )}
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={savePaymentRate}
+                  disabled={loadingPayment}
+                  className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  Guardar monto
+                </button>
+              )}
+              {isAdmin && activeTournamentStatus !== "ACTIVE" && (
+                <button
+                  type="button"
+                  onClick={() => updateTournamentStatus("ACTIVE")}
+                  disabled={loadingPayment}
+                  className="rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  Pago finalizado
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -29,6 +29,7 @@ type Registration = {
   player: Player;
   partner: Player | null;
   partnerTwo: Player | null;
+  teamName?: string | null;
 };
 
 type StandingEntry = {
@@ -53,6 +54,7 @@ type Category = {
   abbreviation: string;
   drawType: DrawType | null;
   groupQualifiers?: number | null;
+  sport?: { id?: string; name?: string } | null;
 };
 
 type Club = {
@@ -121,14 +123,19 @@ type Props = {
 
 const formatTeamName = (registration?: Registration) => {
   if (!registration) return "N/D";
+  const teamName = registration.teamName?.trim();
   const players = [
     registration.player,
     registration.partner,
     registration.partnerTwo,
   ].filter(Boolean) as Player[];
-  return players
+  const playersLabel = players
     .map((player) => `${player.firstName} ${player.lastName}`.trim())
     .join(" / ");
+  if (teamName) {
+    return playersLabel ? `${teamName} (${playersLabel})` : teamName;
+  }
+  return playersLabel || "N/D";
 };
 
 const DEFAULT_TIEBREAKERS: Tiebreaker[] = [
@@ -158,6 +165,9 @@ const formatOrdinal = (value: number) => {
   if (value === 3) return "3ro";
   return `${value}to`;
 };
+
+const isFrontonCategory = (category?: Category | null) =>
+  (category?.sport?.name ?? "").toLowerCase().includes("fronton");
 
 const emptyScoreSet = (): ScoreSet => ({ a: "", b: "", duration: "" });
 
@@ -350,6 +360,37 @@ const parseSlotKey = (key: string) => {
   return { date, time, clubId, courtNumber };
 };
 
+const formatPrintDate = (value: string) => {
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  const weekdays = [
+    "domingo",
+    "lunes",
+    "martes",
+    "miercoles",
+    "jueves",
+    "viernes",
+    "sabado",
+  ];
+  const months = [
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "octubre",
+    "noviembre",
+    "diciembre",
+  ];
+  return `${weekdays[date.getDay()]} ${date.getDate()} de ${
+    months[date.getMonth()]
+  } del ${date.getFullYear()}`;
+};
+
 export default function TournamentSchedule({ tournamentId, tournamentName }: Props) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [registrations, setRegistrations] = useState<Registration[]>([]);
@@ -388,6 +429,55 @@ export default function TournamentSchedule({ tournamentId, tournamentName }: Pro
   );
   const [scoreSaving, setScoreSaving] = useState(false);
   const [scoreError, setScoreError] = useState<string | null>(null);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set());
+
+  const toggleTeamDetails = (registrationId: string) => {
+    setExpandedTeams((prev) => {
+      const next = new Set(prev);
+      if (next.has(registrationId)) {
+        next.delete(registrationId);
+      } else {
+        next.add(registrationId);
+      }
+      return next;
+    });
+  };
+
+  const handleDownloadPdf = async () => {
+    if (downloadingPdf) return;
+    setDownloadingPdf(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/tournaments/${tournamentId}/fixtures?format=pdf`,
+        {
+          method: "GET",
+          credentials: "include",
+        }
+      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const detail = data?.detail ? ` (${data.detail})` : "";
+        throw new Error(
+          `${data?.error ?? "No se pudo descargar el PDF"}${detail}`
+        );
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `fixture-${tournamentName || "torneo"}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo descargar el PDF");
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -587,22 +677,54 @@ export default function TournamentSchedule({ tournamentId, tournamentName }: Pro
 
 const renderTeamDisplay = (
   label: string | null | undefined,
-  registration?: Registration,
-  showNames = true
+  registration: Registration | undefined,
+  showNames: boolean,
+  category?: Category | null,
+  expandedTeams?: Set<string>,
+  onToggle?: (registrationId: string) => void
 ) => {
   const name = formatTeamName(registration);
-  if (!label) {
-    return <span>{name}</span>;
-  }
   if (!showNames || name === "N/D") {
-    return (
+    return label ? (
       <span className="text-[11px] font-semibold text-slate-500">{label}</span>
+    ) : (
+      <span>{name}</span>
     );
   }
+  const teamName = registration?.teamName?.trim();
+  const isFronton = isFrontonCategory(category);
+  const showTeamToggle = Boolean(teamName && isFronton && registration);
+  const playersLabel = registration
+    ? [registration.player, registration.partner, registration.partnerTwo]
+        .filter(Boolean)
+        .map((player) => `${player.firstName} ${player.lastName}`.trim())
+        .join(" / ")
+    : "";
+  const displayName =
+    showTeamToggle && teamName ? teamName : formatTeamName(registration);
+  const isExpanded =
+    showTeamToggle && registration ? expandedTeams?.has(registration.id) : false;
   return (
     <div className="flex flex-col leading-tight">
-      <span className="text-[11px] font-semibold text-slate-500">{label}</span>
-      <span className="text-slate-900">{name}</span>
+      {label && (
+        <span className="text-[11px] font-semibold text-slate-500">{label}</span>
+      )}
+      <div className="flex items-center gap-2">
+        <span className="text-slate-900">{displayName}</span>
+        {showTeamToggle && registration && onToggle && (
+          <button
+            type="button"
+            onClick={() => onToggle(registration.id)}
+            className="rounded-full border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-500 transition hover:border-slate-300 hover:bg-slate-50"
+            aria-label="Ver jugadores"
+          >
+            {isExpanded ? "v" : ">"}
+          </button>
+        )}
+      </div>
+      {showTeamToggle && isExpanded && playersLabel && (
+        <span className="text-xs text-slate-500">{playersLabel}</span>
+      )}
     </div>
   );
 };
@@ -733,6 +855,18 @@ const renderTeamDisplay = (
     return Array.from(scheduleMap.keys()).sort();
   }, [playDays, scheduleMap]);
 
+  const [activeScheduleDay, setActiveScheduleDay] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (scheduleDays.length === 0) {
+      setActiveScheduleDay(null);
+      return;
+    }
+    if (!activeScheduleDay || !scheduleDays.includes(activeScheduleDay)) {
+      setActiveScheduleDay(scheduleDays[0]);
+    }
+  }, [scheduleDays, activeScheduleDay]);
+
   const courts = useMemo(() => {
     const list: { clubId: string; clubName: string; courtNumber: number }[] = [];
     clubs.forEach((club) => {
@@ -758,9 +892,20 @@ const renderTeamDisplay = (
     );
   };
 
+  const isByeMatch = (match?: Match | null) => {
+    if (!match) return false;
+    if (match.stage !== "PLAYOFF" || match.isBronzeMatch) return false;
+    const round = match.roundNumber ?? 1;
+    if (round !== 1) return false;
+    const hasA = Boolean(match.teamAId);
+    const hasB = Boolean(match.teamBId);
+    return (hasA && !hasB) || (hasB && !hasA);
+  };
+
   const matchesBySlot = useMemo(() => {
     const map = new Map<string, Match>();
     matches.forEach((match) => {
+      if (isByeMatch(match)) return;
       const key = matchSlotKey(match);
       if (key) {
         map.set(key, match);
@@ -770,7 +915,7 @@ const renderTeamDisplay = (
   }, [matches]);
 
   const unscheduledMatches = useMemo(
-    () => matches.filter((match) => !matchSlotKey(match)),
+    () => matches.filter((match) => !matchSlotKey(match) && !isByeMatch(match)),
     [matches]
   );
 
@@ -1135,6 +1280,41 @@ const renderTeamDisplay = (
 
   return (
     <div className="space-y-8">
+      <style jsx global>{`
+        @media print {
+          .print-hidden {
+            display: none !important;
+          }
+          .print-only {
+            display: block !important;
+          }
+          .print-hide-row {
+            display: none !important;
+          }
+          .print-area {
+            box-shadow: none !important;
+            border: 0 !important;
+          }
+          .print-table {
+            font-size: 10px !important;
+          }
+          .print-table th,
+          .print-table td {
+            padding: 6px 8px !important;
+            white-space: nowrap !important;
+          }
+          .print-table td:last-child,
+          .print-table th:last-child {
+            padding-right: 12px !important;
+          }
+          body {
+            background: #ffffff !important;
+          }
+        }
+        .print-only {
+          display: none;
+        }
+      `}</style>
       <div className="admin-fade-up relative overflow-hidden rounded-[24px] border border-white/70 bg-white/80 p-6 shadow-[0_20px_60px_-45px_rgba(15,23,42,0.35)] ring-1 ring-slate-200/70 backdrop-blur">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-indigo-300/70 via-sky-300/60 to-amber-200/70" />
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1157,7 +1337,7 @@ const renderTeamDisplay = (
           Define si se juega una o dos rondas por dia y genera el horario con
           playoff en los ultimos dos dias.
         </p>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
+        <div className="mt-4 flex flex-wrap items-center gap-3 print-hidden">
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
               Rondas por dia
@@ -1181,6 +1361,14 @@ const renderTeamDisplay = (
           >
             {generating ? "Generando..." : "Generar calendario"}
           </button>
+          <button
+            type="button"
+            onClick={handleDownloadPdf}
+            disabled={downloadingPdf}
+            className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+          >
+            {downloadingPdf ? "Descargando..." : "Descargar fixture (PDF)"}
+          </button>
         </div>
       </div>
 
@@ -1190,7 +1378,7 @@ const renderTeamDisplay = (
         </p>
       ) : (
         <div className="space-y-8">
-          <div className="admin-fade-up overflow-hidden rounded-[24px] border border-slate-200/70 bg-white/90 p-6 shadow-[0_20px_60px_-45px_rgba(15,23,42,0.35)]">
+          <div className="admin-fade-up overflow-hidden rounded-[24px] border border-slate-200/70 bg-white/90 p-6 shadow-[0_20px_60px_-45px_rgba(15,23,42,0.35)] print-hidden">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="text-lg font-semibold text-slate-900">
@@ -1277,25 +1465,49 @@ const renderTeamDisplay = (
                           : null;
                         const groupLabel =
                           match.stage === "PLAYOFF"
-                            ? getPlayoffRoundLabel(
-                                match.categoryId,
-                                match.roundNumber
-                              )
+                            ? match.isBronzeMatch
+                              ? "Bronce"
+                              : getPlayoffRoundLabel(
+                                  match.categoryId,
+                                  match.roundNumber
+                                )
                             : match.groupName ?? "-";
-                        const teamADisplay = renderTeamDisplay(
-                          showPlayoffLabel ? teamALabel : null,
-                          teamA,
-                          !showPlayoffLabel ||
-                            (groupStageCompleteByCategory.get(match.categoryId) ??
-                              false)
-                        );
-                        const teamBDisplay = renderTeamDisplay(
-                          showPlayoffLabel ? teamBLabel : null,
-                          teamB,
-                          !showPlayoffLabel ||
-                            (groupStageCompleteByCategory.get(match.categoryId) ??
-                              false)
-                        );
+                        const teamADisplay = match.teamAId
+                          ? renderTeamDisplay(
+                              showPlayoffLabel ? teamALabel : null,
+                              teamA,
+                              !showPlayoffLabel ||
+                                (groupStageCompleteByCategory.get(
+                                  match.categoryId
+                                ) ??
+                                  false),
+                              category,
+                              expandedTeams,
+                              toggleTeamDetails
+                            )
+                          : (
+                              <span className="text-xs text-slate-400">
+                                Por definir
+                              </span>
+                            );
+                        const teamBDisplay = match.teamBId
+                          ? renderTeamDisplay(
+                              showPlayoffLabel ? teamBLabel : null,
+                              teamB,
+                              !showPlayoffLabel ||
+                                (groupStageCompleteByCategory.get(
+                                  match.categoryId
+                                ) ??
+                                  false),
+                              category,
+                              expandedTeams,
+                              toggleTeamDetails
+                            )
+                          : (
+                              <span className="text-xs text-slate-400">
+                                Por definir
+                              </span>
+                            );
                         const hasScore =
                           Array.isArray(match.games) && match.games.length > 0;
                         return (
@@ -1372,9 +1584,17 @@ const renderTeamDisplay = (
                 return (
                   <div
                     key={day}
-                    className="admin-fade-up overflow-hidden rounded-[24px] border border-slate-200/70 bg-white/90 p-6 shadow-[0_20px_60px_-45px_rgba(15,23,42,0.35)]"
+                    className="admin-fade-up overflow-hidden rounded-[24px] border border-slate-200/70 bg-white/90 p-6 shadow-[0_20px_60px_-45px_rgba(15,23,42,0.35)] print-area"
                   >
-                    <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="print-only mb-4">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">
+                        Fixture del torneo {tournamentName}
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-slate-900">
+                        {formatPrintDate(day)}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-3 print-hidden">
                       <div>
                         <h3 className="text-lg font-semibold text-slate-900">
                           Dia {day}
@@ -1391,7 +1611,7 @@ const renderTeamDisplay = (
                       </p>
                     ) : (
                       <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
-                        <table className="min-w-full divide-y divide-slate-200/70 text-xs">
+                        <table className="print-table min-w-full divide-y divide-slate-200/70 text-xs">
                           <thead className="bg-slate-50/80 text-[10px] uppercase tracking-[0.18em] text-slate-500">
                             <tr>
                               <th className="px-3 py-3 text-left font-semibold">
@@ -1418,7 +1638,7 @@ const renderTeamDisplay = (
                               <th className="px-3 py-3 text-left font-semibold">
                                 Equipo 2
                               </th>
-                              <th className="px-3 py-3 text-left font-semibold">
+                              <th className="px-3 py-3 text-left font-semibold print-hidden">
                                 Marcador
                               </th>
                             </tr>
@@ -1452,32 +1672,58 @@ const renderTeamDisplay = (
                                 : null;
                               const groupLabel =
                                 match?.stage === "PLAYOFF" && match
-                                  ? getPlayoffRoundLabel(
-                                      match.categoryId,
-                                      match.roundNumber
-                                    )
+                                  ? match.isBronzeMatch
+                                    ? "Bronce"
+                                    : getPlayoffRoundLabel(
+                                        match.categoryId,
+                                        match.roundNumber
+                                      )
                                   : match?.groupName ?? "-";
                               const isOver = dragOverSlot === slot.key;
-                              const teamADisplay = renderTeamDisplay(
-                                match && showPlayoffLabel ? teamALabel : null,
-                                teamA ?? undefined,
-                                !showPlayoffLabel ||
-                                  (match &&
-                                    (groupStageCompleteByCategory.get(
-                                      match.categoryId
-                                    ) ??
-                                      false))
-                              );
-                              const teamBDisplay = renderTeamDisplay(
-                                match && showPlayoffLabel ? teamBLabel : null,
-                                teamB ?? undefined,
-                                !showPlayoffLabel ||
-                                  (match &&
-                                    (groupStageCompleteByCategory.get(
-                                      match.categoryId
-                                    ) ??
-                                      false))
-                              );
+                              const teamADisplay =
+                                match && match.teamAId
+                                  ? renderTeamDisplay(
+                                      match && showPlayoffLabel
+                                        ? teamALabel
+                                        : null,
+                                      teamA ?? undefined,
+                                      !showPlayoffLabel ||
+                                        (match &&
+                                          (groupStageCompleteByCategory.get(
+                                            match.categoryId
+                                          ) ??
+                                            false)),
+                                      category,
+                                      expandedTeams,
+                                      toggleTeamDetails
+                                    )
+                                  : (
+                                      <span className="text-xs text-slate-400">
+                                        Por definir
+                                      </span>
+                                    );
+                              const teamBDisplay =
+                                match && match.teamBId
+                                  ? renderTeamDisplay(
+                                      match && showPlayoffLabel
+                                        ? teamBLabel
+                                        : null,
+                                      teamB ?? undefined,
+                                      !showPlayoffLabel ||
+                                        (match &&
+                                          (groupStageCompleteByCategory.get(
+                                            match.categoryId
+                                          ) ??
+                                            false)),
+                                      category,
+                                      expandedTeams,
+                                      toggleTeamDetails
+                                    )
+                                  : (
+                                      <span className="text-xs text-slate-400">
+                                        Por definir
+                                      </span>
+                                    );
                               const hasScore =
                                 match &&
                                 Array.isArray(match.games) &&
@@ -1498,7 +1744,7 @@ const renderTeamDisplay = (
                                   }
                                   className={`transition ${
                                     isOver ? "bg-indigo-50" : "bg-white"
-                                  }`}
+                                  } ${match ? "" : "print-hide-row"}`}
                                 >
                                   <td className="px-3 py-2 text-slate-700">
                                     {slot.time}
@@ -1536,7 +1782,7 @@ const renderTeamDisplay = (
                                             handleMatchDragStart(event, match)
                                           }
                                           onDragEnd={handleDragEnd}
-                                          className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-[11px] font-semibold text-slate-400 shadow-sm transition hover:text-slate-600"
+                                          className="print-hidden inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-[11px] font-semibold text-slate-400 shadow-sm transition hover:text-slate-600"
                                           title="Mover"
                                         >
                                           ...
@@ -1570,7 +1816,7 @@ const renderTeamDisplay = (
                                       <span className="text-slate-400">-</span>
                                     )}
                                   </td>
-                                  <td className="px-3 py-2">
+                                  <td className="px-3 py-2 print-hidden">
                                     {match ? (
                                       <button
                                         type="button"

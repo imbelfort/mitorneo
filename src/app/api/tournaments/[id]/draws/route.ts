@@ -52,6 +52,7 @@ const loadDrawCategories = async (tournamentId: string) => {
     groupMaxSize: entry.groupMaxSize ?? null,
     registrationCount: countsMap.get(entry.categoryId) ?? 0,
     category: entry.category,
+    hasBronzeMatch: entry.hasBronzeMatch,
   }));
 };
 

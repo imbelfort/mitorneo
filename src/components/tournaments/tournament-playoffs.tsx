@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { createBracket as CreateBracketFn } from "bracketry";
+
+type CreateBracketFn = typeof import("bracketry")["createBracket"];
 
 type DrawType = "ROUND_ROBIN" | "GROUPS_PLAYOFF" | "PLAYOFF";
 type MatchStage = "GROUP" | "PLAYOFF";
@@ -30,6 +31,7 @@ type Registration = {
   player: Player;
   partner: Player | null;
   partnerTwo: Player | null;
+  teamName?: string | null;
 };
 
 type Category = {
@@ -53,6 +55,7 @@ type Match = {
   teamAId?: string | null;
   teamBId?: string | null;
   createdAt?: string;
+  isBronzeMatch?: boolean | null;
 };
 
 type GroupQualifier = {
@@ -107,14 +110,19 @@ const DEFAULT_TIEBREAKERS: Tiebreaker[] = [
 
 const formatTeamName = (registration?: Registration) => {
   if (!registration) return "N/D";
+  const teamName = registration.teamName?.trim();
   const players = [
     registration.player,
     registration.partner,
     registration.partnerTwo,
   ].filter(Boolean) as Player[];
-  return players
+  const playersLabel = players
     .map((player) => `${player.firstName} ${player.lastName}`.trim())
     .join(" / ");
+  if (teamName) {
+    return playersLabel ? `${teamName} (${playersLabel})` : teamName;
+  }
+  return playersLabel || "N/D";
 };
 
 const formatOrdinal = (value: number) => {
@@ -491,9 +499,9 @@ const BracketCanvas = ({
       }
       if (!wrapperRef.current) return;
       if (!createBracketRef.current) {
-        const module = await import("bracketry");
+        const bracketryModule = await import("bracketry");
         if (!active) return;
-        createBracketRef.current = module.createBracket;
+        createBracketRef.current = bracketryModule.createBracket;
       }
       const createBracket = createBracketRef.current;
       if (!createBracket) return;
@@ -1116,8 +1124,14 @@ export default function TournamentPlayoffs({ tournamentId, tournamentName }: Pro
         playoffCategories.map((category) => {
           const categoryMatches =
             playoffMatchesByCategory.get(category.id) ?? [];
+          const mainMatches = categoryMatches.filter(
+            (match) => !match.isBronzeMatch && (match.teamAId || match.teamBId)
+          );
+          const bronzeMatches = categoryMatches.filter(
+            (match) => match.isBronzeMatch && (match.teamAId || match.teamBId)
+          );
           const roundMap = new Map<number, Match[]>();
-          categoryMatches.forEach((match) => {
+          mainMatches.forEach((match) => {
             const round = match.roundNumber ?? 1;
             if (!roundMap.has(round)) {
               roundMap.set(round, []);
@@ -1125,6 +1139,25 @@ export default function TournamentPlayoffs({ tournamentId, tournamentName }: Pro
             roundMap.get(round)?.push(match);
           });
           const roundNumbers = Array.from(roundMap.keys()).sort((a, b) => a - b);
+          const bronzeRoundMap = new Map<number, Match[]>();
+          bronzeMatches.forEach((match) => {
+            const round = match.roundNumber ?? 1;
+            if (!bronzeRoundMap.has(round)) {
+              bronzeRoundMap.set(round, []);
+            }
+            bronzeRoundMap.get(round)?.push(match);
+          });
+          const bronzeRoundNumbers = Array.from(bronzeRoundMap.keys()).sort(
+            (a, b) => a - b
+          );
+          const bronzeLabelMap = new Map<number, string>();
+          if (bronzeRoundNumbers.length > 0) {
+            bronzeLabelMap.set(bronzeRoundNumbers[0], "Bronce");
+          }
+          const bronzeBracketSize = Math.max(
+            2,
+            nextPowerOfTwo(bronzeMatches.length || 2)
+          );
           const labelMap = playoffRoundLabels.get(category.id);
           const bracketSize = bracketSizeByCategory.get(category.id);
           const qualifiedCount = qualifiedCountByCategory.get(category.id) ?? 0;
@@ -1132,13 +1165,18 @@ export default function TournamentPlayoffs({ tournamentId, tournamentName }: Pro
             registrationsByCategory.get(category.id)?.length ?? 0;
           const hasCategoryPlayoffs =
             (playoffMatchesByCategory.get(category.id) ?? []).length > 0;
+          const labelForBracket = new Map<string, string>();
+          labelByRegistration.forEach((value, key) => {
+            labelForBracket.set(key, value);
+          });
+          
 
           return (
-            <div
-              key={category.id}
-              className="admin-fade-up space-y-5 rounded-[24px] border border-white/70 bg-white/80 p-6 shadow-[0_20px_60px_-45px_rgba(15,23,42,0.35)] ring-1 ring-slate-200/70 backdrop-blur"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-3">
+          <div
+            key={category.id}
+            className="admin-fade-up space-y-5 rounded-[24px] border border-white/70 bg-white/80 p-6 shadow-[0_20px_60px_-45px_rgba(15,23,42,0.35)] ring-1 ring-slate-200/70 backdrop-blur"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900">
                     {category.name}
@@ -1147,11 +1185,11 @@ export default function TournamentPlayoffs({ tournamentId, tournamentName }: Pro
                     {category.abbreviation}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">
                     {registrationsCount} inscritos
                   </span>
-                  <span className="text-xs text-slate-500">
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">
                     Clasifican: {qualifiedCount}
                   </span>
                   {bracketSize && (
@@ -1159,6 +1197,9 @@ export default function TournamentPlayoffs({ tournamentId, tournamentName }: Pro
                       Llave de {bracketSize}
                     </span>
                   )}
+                  <span className="rounded-full bg-indigo-50 px-3 py-1 text-[11px] font-semibold text-indigo-700">
+                    Arrastra para mover
+                  </span>
                   <button
                     type="button"
                     onClick={() => {
@@ -1182,26 +1223,38 @@ export default function TournamentPlayoffs({ tournamentId, tournamentName }: Pro
                 </div>
               </div>
 
-              {categoryMatches.length === 0 ? (
-                <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                  Todavia no hay llaves generadas para esta categoria.
-                </p>
-              ) : (
-                <div className="rounded-[32px] border border-slate-100 bg-gradient-to-br from-white via-slate-50 to-white p-4 shadow-[0_20px_60px_-45px_rgba(15,23,42,0.35)]">
-                  <BracketCanvas
-                    categoryId={category.id}
-                    matches={categoryMatches}
-                    roundNumbers={roundNumbers}
-                    roundLabelMap={labelMap}
-                    bracketSize={bracketSize}
-                    registrationMap={registrationMap}
-                    labelByRegistration={labelByRegistration}
-                    onSwapSides={handleSwapSides}
-                    disableSwap={swapping}
-                  />
+          {mainMatches.length === 0 ? (
+            <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              Todavia no hay llaves generadas para esta categoria.
+            </p>
+          ) : (
+            <>
+              {bronzeMatches.length > 0 && (
+                <div className="rounded-[28px] border border-amber-100 bg-amber-50/70 p-4 text-sm text-amber-900 shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em]">
+                    Partido por el 3er lugar
+                  </p>
+                  <p className="mt-2">
+                    Los perdedores de semifinales juegan aqui por el podio.
+                  </p>
                 </div>
               )}
-            </div>
+              <div className="rounded-[32px] border border-slate-100 bg-gradient-to-br from-white via-slate-50 to-white p-4 shadow-[0_20px_60px_-45px_rgba(15,23,42,0.35)]">
+                <BracketCanvas
+                  categoryId={category.id}
+                  matches={mainMatches}
+                  roundNumbers={roundNumbers}
+                  roundLabelMap={labelMap}
+                  bracketSize={bracketSize}
+                  registrationMap={registrationMap}
+                  labelByRegistration={labelForBracket}
+                  onSwapSides={handleSwapSides}
+                  disableSwap={swapping}
+                />
+              </div>
+            </>
+          )}
+          </div>
           );
         })
       )}
@@ -1219,3 +1272,11 @@ export default function TournamentPlayoffs({ tournamentId, tournamentName }: Pro
     </div>
   );
 }
+
+
+
+
+
+
+
+

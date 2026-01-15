@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
 
 type DrawType = "ROUND_ROBIN" | "GROUPS_PLAYOFF" | "PLAYOFF";
 type Tiebreaker =
@@ -23,6 +23,7 @@ type DrawCategoryResponse = {
   category: Category;
   groupMinSize?: number | null;
   groupMaxSize?: number | null;
+  hasBronzeMatch?: boolean | null;
 };
 
 type DrawCategory = {
@@ -32,6 +33,7 @@ type DrawCategory = {
   category: Category;
   groupMinSize: string;
   groupMaxSize: string;
+  hasBronzeMatch: boolean;
 };
 
 type ScheduleEntry = {
@@ -80,6 +82,9 @@ const drawOptions: { value: DrawType; label: string }[] = [
 const groupDrawTypes = new Set<DrawType>(["ROUND_ROBIN", "GROUPS_PLAYOFF"]);
 const isGroupDraw = (value: DrawType | null) =>
   value !== null && groupDrawTypes.has(value);
+const playoffDrawTypes = new Set<DrawType>(["GROUPS_PLAYOFF", "PLAYOFF"]);
+const isPlayoffDraw = (value: DrawType | null) =>
+  value !== null && playoffDrawTypes.has(value);
 const defaultGroupMinSize = "3";
 const defaultGroupMaxSize = "4";
 
@@ -96,6 +101,23 @@ const defaultTiebreakerOrder: Tiebreaker[] = [
   "POINTS_PER_MATCH",
   "POINTS_DIFF",
 ];
+
+const isTiebreaker = (value: string): value is Tiebreaker =>
+  tiebreakerOptions.some((option) => option.value === value);
+
+const normalizeTiebreakerOrder = (value?: string[]) => {
+  const filtered = Array.isArray(value)
+    ? value.filter((item): item is Tiebreaker => isTiebreaker(item))
+    : [];
+  const unique = Array.from(new Set(filtered));
+  const hasAll = defaultTiebreakerOrder.every((item) =>
+    unique.includes(item)
+  );
+  if (!hasAll || unique.length !== defaultTiebreakerOrder.length) {
+    return [...defaultTiebreakerOrder];
+  }
+  return unique;
+};
 
 export default function TournamentDraws({ tournamentId, tournamentName }: Props) {
   const [drawCategories, setDrawCategories] = useState<DrawCategory[]>([]);
@@ -119,8 +141,9 @@ export default function TournamentDraws({ tournamentId, tournamentName }: Props)
     useState<Tiebreaker | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [bronzeUpdatingId, setBronzeUpdatingId] = useState<string | null>(null);
 
-  const loadDraws = async () => {
+  const loadDraws = useCallback(async () => {
     setLoading(true);
     setError(null);
     const res = await fetch(`/api/tournaments/${tournamentId}/draws`, {
@@ -147,12 +170,13 @@ export default function TournamentDraws({ tournamentId, tournamentName }: Props)
           item.groupMaxSize !== null && item.groupMaxSize !== undefined
             ? String(item.groupMaxSize)
             : "",
+        hasBronzeMatch: Boolean(item.hasBronzeMatch),
       }));
       setDrawCategories(mapped);
     }
-  };
+  }, [tournamentId]);
 
-  const loadSchedule = async () => {
+  const loadSchedule = useCallback(async () => {
     setLoadingSchedule(true);
     setError(null);
     const res = await fetch(`/api/tournaments/${tournamentId}/schedule`, {
@@ -188,9 +212,9 @@ export default function TournamentDraws({ tournamentId, tournamentName }: Props)
         };
       })
     );
-  };
+  }, [tournamentId]);
 
-  const loadGroupPoints = async () => {
+  const loadGroupPoints = useCallback(async () => {
     setLoadingGroupPoints(true);
     setError(null);
     const res = await fetch(`/api/tournaments/${tournamentId}/group-points`, {
@@ -216,13 +240,14 @@ export default function TournamentDraws({ tournamentId, tournamentName }: Props)
         tiebreakerOrder,
       });
     }
-  };
+  }, [tournamentId]);
 
   useEffect(() => {
-    loadDraws();
-    loadSchedule();
-    loadGroupPoints();
-  }, [tournamentId]);
+    const loadAll = async () => {
+      await Promise.all([loadDraws(), loadSchedule(), loadGroupPoints()]);
+    };
+    void loadAll();
+  }, [loadDraws, loadSchedule, loadGroupPoints]);
 
   const registeredCategories = useMemo(
     () => drawCategories.filter((item) => item.registrationCount > 0),
@@ -273,21 +298,65 @@ export default function TournamentDraws({ tournamentId, tournamentName }: Props)
     setGroupPoints((prev) => ({ ...prev, [field]: value }));
   };
 
-  const isTiebreaker = (value: string): value is Tiebreaker =>
-    tiebreakerOptions.some((option) => option.value === value);
+  const toggleBronzeMatch = async (categoryId: string, enable: boolean) => {
+    setBronzeUpdatingId(categoryId);
+    setError(null);
+    setMessage(null);
 
-  const normalizeTiebreakerOrder = (value?: string[]) => {
-    const filtered = Array.isArray(value)
-      ? value.filter((item): item is Tiebreaker => isTiebreaker(item))
-      : [];
-    const unique = Array.from(new Set(filtered));
-    const hasAll = defaultTiebreakerOrder.every((item) =>
-      unique.includes(item)
+    const res = await fetch(
+      `/api/tournaments/${tournamentId}/categories/${categoryId}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ hasBronzeMatch: enable }),
+      }
     );
-    if (!hasAll || unique.length !== defaultTiebreakerOrder.length) {
-      return [...defaultTiebreakerOrder];
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setBronzeUpdatingId(null);
+      const detail = data?.detail ? ` (${data.detail})` : "";
+      setError(
+        `${data?.error ?? "No se pudo actualizar la configuracion de 3ro"}${detail}`
+      );
+      return;
     }
-    return unique;
+
+    setDrawCategories((prev) =>
+      prev.map((entry) =>
+        entry.categoryId === categoryId
+          ? { ...entry, hasBronzeMatch: enable }
+          : entry
+      )
+    );
+
+    if (enable) {
+      const fixtureRes = await fetch(
+        `/api/tournaments/${tournamentId}/fixtures/playoffs`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ categoryId, regenerate: true }),
+        }
+      );
+      const fixtureData = await fixtureRes.json().catch(() => ({}));
+      if (!fixtureRes.ok) {
+        setBronzeUpdatingId(null);
+        const detail = fixtureData?.detail ? ` (${fixtureData.detail})` : "";
+        setError(
+          `${fixtureData?.error ?? "No se pudo generar el partido por 3er lugar"}${detail}`
+        );
+        return;
+      }
+    }
+
+    setBronzeUpdatingId(null);
+    setMessage(
+      enable
+        ? "Partido por 3er lugar habilitado"
+        : "Partido por 3er lugar deshabilitado"
+    );
   };
 
   const reorderTiebreakers = (
@@ -891,6 +960,9 @@ export default function TournamentDraws({ tournamentId, tournamentName }: Props)
                 <th className="px-3 py-3 text-left font-semibold">
                   Max por grupo
                 </th>
+                <th className="px-3 py-3 text-left font-semibold">
+                  3er lugar
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
@@ -964,6 +1036,32 @@ export default function TournamentDraws({ tournamentId, tournamentName }: Props)
                       className="w-full max-w-[160px] rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-100"
                       placeholder={defaultGroupMaxSize}
                     />
+                  </td>
+                  <td className="px-3 py-2">
+                    {isPlayoffDraw(item.drawType) ? (
+                      <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(item.hasBronzeMatch)}
+                          disabled={
+                            bronzeUpdatingId === item.categoryId ||
+                            !isPlayoffDraw(item.drawType)
+                          }
+                          onChange={(event) =>
+                            toggleBronzeMatch(
+                              item.categoryId,
+                              event.target.checked
+                            )
+                          }
+                          className="h-[16px] w-[16px] rounded border border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <span className="text-[11px] uppercase tracking-[0.25em] text-slate-500">
+                          3ro y 4to
+                        </span>
+                      </label>
+                    ) : (
+                      <span className="text-xs text-slate-400">-</span>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -476,6 +476,52 @@ export async function PATCH(
   }
 }
 
+export async function GET(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  const session = await getServerSession(authOptions);
+  if (
+    !session?.user ||
+    (session.user.role !== "ADMIN" && session.user.role !== "TOURNAMENT_ADMIN")
+  ) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  }
+
+  const tournamentId = resolveId(request, params);
+  if (!tournamentId) {
+    return NextResponse.json({ error: "Torneo no encontrado" }, { status: 404 });
+  }
+
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+    select: {
+      id: true,
+      ownerId: true,
+      leagueId: true,
+      rankingEnabled: true,
+      league: { select: { id: true, name: true } },
+    },
+  });
+
+  if (!tournament) {
+    return NextResponse.json({ error: "Torneo no encontrado" }, { status: 404 });
+  }
+
+  if (session.user.role !== "ADMIN" && tournament.ownerId !== session.user.id) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  }
+
+  return NextResponse.json({
+    tournament: {
+      id: tournament.id,
+      leagueId: tournament.leagueId,
+      rankingEnabled: tournament.rankingEnabled,
+      league: tournament.league,
+    },
+  });
+}
+
 export async function DELETE(
   request: Request,
   { params }: { params: { id: string } }

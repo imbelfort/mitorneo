@@ -21,6 +21,14 @@ type Player = {
   photoUrl: string | null;
 };
 
+type LeagueRanking = {
+  leagueId: string;
+  leagueName: string;
+  points: number;
+  position: number | null;
+  totalPlayers: number;
+};
+
 type ViewState = "loading" | "ready" | "error";
 
 const statusCopy: Record<string, string> = {
@@ -67,6 +75,8 @@ export default function PlayerProfilePage() {
   const [state, setState] = useState<ViewState>("loading");
   const [player, setPlayer] = useState<Player | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [rankings, setRankings] = useState<LeagueRanking[]>([]);
+  const [rankingLoading, setRankingLoading] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -98,6 +108,30 @@ export default function PlayerProfilePage() {
     };
 
     load();
+
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadRankings = async () => {
+      if (!id) return;
+      setRankingLoading(true);
+      const res = await fetch(`/api/players/${id}/ranking`, { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (!active) return;
+      setRankingLoading(false);
+      if (res.ok && Array.isArray(data.rankings)) {
+        setRankings(data.rankings);
+      } else {
+        setRankings([]);
+      }
+    };
+
+    loadRankings();
 
     return () => {
       active = false;
@@ -209,6 +243,51 @@ export default function PlayerProfilePage() {
               </p>
             </div>
           </div>
+        </div>
+
+        <div className="mt-8 rounded-2xl border border-slate-200/80 bg-slate-50/60 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                Ranking por liga
+              </p>
+              <p className="mt-1 text-sm text-slate-600">
+                Se calcula con torneos finalizados en cada liga.
+              </p>
+            </div>
+          </div>
+
+          {rankingLoading ? (
+            <p className="mt-3 text-sm text-slate-500">Cargando ranking...</p>
+          ) : rankings.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-500">Sin ranking disponible.</p>
+          ) : (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {rankings.map((entry) => (
+                <div
+                  key={entry.leagueId}
+                  className="rounded-2xl border border-slate-200/70 bg-white px-4 py-3 shadow-sm"
+                >
+                  <p className="text-sm font-semibold text-slate-900">
+                    {entry.leagueName}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Puesto:{" "}
+                    <span className="font-semibold text-slate-800">
+                      {entry.position ?? "-"}
+                    </span>{" "}
+                    / {entry.totalPlayers}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Puntos:{" "}
+                    <span className="font-semibold text-slate-800">
+                      {entry.points}
+                    </span>
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </main>

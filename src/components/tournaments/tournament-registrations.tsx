@@ -34,16 +34,25 @@ type Registration = {
   amountDue?: string | number | null;
   seed?: number | null;
   createdAt?: string | Date | null;
+  teamName?: string | null;
   category: Category;
   player: Player;
   partner?: Player | null;
   partnerTwo?: Player | null;
 };
 
+type Season = {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+};
+
 type Props = {
   tournamentId: string;
   tournamentName: string;
   categories: Category[];
+  tournamentStatus: "WAITING" | "ACTIVE" | "FINISHED";
 };
 
 type RegistrationEntry = {
@@ -52,6 +61,7 @@ type RegistrationEntry = {
   partnerId: string;
   partnerTwoId: string;
   amountPaid: string;
+  teamName: string;
   partnerQuery: string;
   partnerTwoQuery: string;
 };
@@ -80,6 +90,9 @@ const getTeamConfig = (category?: Category | null) => {
   return { minPlayers: 1, maxPlayers: 1 };
 };
 
+const isFrontonCategory = (category?: Category | null) =>
+  (category?.sport?.name?.toLowerCase() ?? "").includes("fronton");
+
 const formatCategoryPrice = (value?: string | number | null) => {
   if (value === null || value === undefined) return "";
   return String(value);
@@ -94,6 +107,7 @@ export default function TournamentRegistrations({
   tournamentId,
   tournamentName,
   categories,
+  tournamentStatus,
 }: Props) {
   const entryCounter = useRef(2);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -113,6 +127,13 @@ export default function TournamentRegistrations({
   );
   const [playerQuery, setPlayerQuery] = useState("");
   const [selectedPlayerId, setSelectedPlayerId] = useState("");
+  const [leagueId, setLeagueId] = useState<string | null>(null);
+  const [leagueName, setLeagueName] = useState<string | null>(null);
+  const [rankingEnabled, setRankingEnabled] = useState(false);
+  const [seasons, setSeasons] = useState<Season[]>([]);
+  const [selectedSeasonId, setSelectedSeasonId] = useState("");
+  const [rankingLoading, setRankingLoading] = useState(false);
+  const [rankingError, setRankingError] = useState<string | null>(null);
   const [entries, setEntries] = useState<RegistrationEntry[]>(() => {
     const firstCategory = categories[0];
     const initialCategoryId = firstCategory?.id ?? "";
@@ -124,6 +145,7 @@ export default function TournamentRegistrations({
         partnerId: "",
         partnerTwoId: "",
         amountPaid: initialAmount,
+        teamName: "",
         partnerQuery: "",
         partnerTwoQuery: "",
       },
@@ -132,6 +154,8 @@ export default function TournamentRegistrations({
   const categoriesById = useMemo(() => {
     return new Map(categories.map((category) => [category.id, category]));
   }, [categories]);
+  const registrationsLocked =
+    tournamentStatus === "ACTIVE" || tournamentStatus === "FINISHED";
 
   const createEntry = (categoryId: string, amountPaid?: string) => {
     const entryId = `entry-${entryCounter.current}`;
@@ -142,6 +166,7 @@ export default function TournamentRegistrations({
       partnerId: "",
       partnerTwoId: "",
       amountPaid: amountPaid ?? "",
+      teamName: "",
       partnerQuery: "",
       partnerTwoQuery: "",
     };
@@ -187,6 +212,7 @@ export default function TournamentRegistrations({
             partnerId: "",
             partnerTwoId: "",
             amountPaid: firstCategory.price ?? "",
+            teamName: "",
             partnerQuery: "",
             partnerTwoQuery: "",
           },
@@ -252,6 +278,54 @@ export default function TournamentRegistrations({
     };
 
     loadData();
+
+    return () => {
+      active = false;
+    };
+  }, [tournamentId]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadRankingContext = async () => {
+      setRankingError(null);
+      const tournamentRes = await fetch(`/api/tournaments/${tournamentId}`, {
+        cache: "no-store",
+      });
+      const tournamentData = await tournamentRes.json().catch(() => ({}));
+      if (!active) return;
+      if (!tournamentRes.ok) return;
+
+      const tournament = tournamentData.tournament ?? null;
+      const league = tournament?.league ?? null;
+      setLeagueId(tournament?.leagueId ?? null);
+      setLeagueName(league?.name ?? null);
+      setRankingEnabled(Boolean(tournament?.rankingEnabled));
+
+      if (!tournament?.leagueId || !tournament?.rankingEnabled) {
+        setSeasons([]);
+        setSelectedSeasonId("");
+        return;
+      }
+
+      const seasonsRes = await fetch(
+        `/api/tournaments/${tournamentId}/seasons`,
+        { cache: "no-store" }
+      );
+      const seasonsData = await seasonsRes.json().catch(() => ({}));
+      if (!active) return;
+      if (seasonsRes.ok && Array.isArray(seasonsData.seasons)) {
+        setSeasons(seasonsData.seasons);
+        if (seasonsData.seasons.length > 0) {
+          setSelectedSeasonId(seasonsData.seasons[0].id);
+        }
+      } else {
+        setSeasons([]);
+        setSelectedSeasonId("");
+      }
+    };
+
+    loadRankingContext();
 
     return () => {
       active = false;
@@ -351,6 +425,10 @@ export default function TournamentRegistrations({
     setError(null);
     setMessage(null);
     const wasEditing = Boolean(editingRegistrationId);
+    if (registrationsLocked) {
+      setError("El torneo ya esta pagado y no permite mas inscripciones.");
+      return;
+    }
 
     if (!selectedPlayerId) {
       setError("Selecciona un jugador");
@@ -380,6 +458,10 @@ export default function TournamentRegistrations({
       const category = categoriesById.get(entry.categoryId);
       if (!category) {
         setError("Selecciona una categoria valida");
+        return;
+      }
+      if (isFrontonCategory(category) && !entry.teamName.trim()) {
+        setError("Nombre de equipo requerido");
         return;
       }
       const teamConfig = getTeamConfig(category);
@@ -435,16 +517,17 @@ export default function TournamentRegistrations({
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             credentials: "include",
-            body: JSON.stringify({
-              categoryId: entry.categoryId,
-              playerId: selectedPlayerId,
-              partnerId: entry.partnerId || null,
-              partnerTwoId: entry.partnerTwoId || null,
-              amountPaid: normalizePriceInput(entry.amountPaid),
-              amountDue: normalizePriceInput(entry.amountPaid),
-            }),
-          }
-        );
+          body: JSON.stringify({
+            categoryId: entry.categoryId,
+            playerId: selectedPlayerId,
+            partnerId: entry.partnerId || null,
+            partnerTwoId: entry.partnerTwoId || null,
+            teamName: entry.teamName.trim(),
+            amountPaid: normalizePriceInput(entry.amountPaid),
+            amountDue: normalizePriceInput(entry.amountPaid),
+          }),
+        }
+      );
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
           const detail = data?.detail ? ` (${data.detail})` : "";
@@ -463,6 +546,7 @@ export default function TournamentRegistrations({
               playerId: selectedPlayerId,
               partnerId: entry.partnerId || null,
               partnerTwoId: entry.partnerTwoId || null,
+              teamName: entry.teamName.trim(),
               amountPaid: normalizePriceInput(entry.amountPaid),
               amountDue: normalizePriceInput(entry.amountPaid),
             }),
@@ -507,7 +591,42 @@ export default function TournamentRegistrations({
     );
   };
 
+  const handleRankByLeague = async () => {
+    if (!leagueId || !rankingEnabled) {
+      setRankingError("Este torneo no usa ranking por liga.");
+      return;
+    }
+    if (!selectedSeasonId) {
+      setRankingError("Selecciona una temporada.");
+      return;
+    }
+    setRankingError(null);
+    setRankingLoading(true);
+    const res = await fetch(
+      `/api/tournaments/${tournamentId}/registrations/rankings`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ seasonId: selectedSeasonId }),
+      }
+    );
+    const data = await res.json().catch(() => ({}));
+    setRankingLoading(false);
+    if (!res.ok) {
+      const detail = data?.detail ? ` (${data.detail})` : "";
+      setRankingError(`${data?.error ?? "No se pudo rankear"}${detail}`);
+      return;
+    }
+    await refreshRegistrations();
+    setMessage("Ranking actualizado segun la liga.");
+  };
+
   const handleDelete = async (registrationId: string) => {
+    if (registrationsLocked) {
+      setError("El torneo ya esta pagado y no permite cambios.");
+      return;
+    }
     setError(null);
     setMessage(null);
     setSaving(true);
@@ -554,6 +673,7 @@ export default function TournamentRegistrations({
         partnerId: registration.partner?.id ?? "",
         partnerTwoId: registration.partnerTwo?.id ?? "",
         amountPaid: formatCategoryPrice(registration.amountPaid),
+        teamName: registration.teamName ?? "",
         partnerQuery: registration.partner ? playerLabel(registration.partner) : "",
         partnerTwoQuery: registration.partnerTwo
           ? playerLabel(registration.partnerTwo)
@@ -715,6 +835,7 @@ export default function TournamentRegistrations({
     registration: Registration,
     categoryId: string
   ) => {
+    if (registrationsLocked) return;
     setDraggingId(registration.id);
     setDraggingCategoryId(categoryId);
     event.dataTransfer.effectAllowed = "move";
@@ -745,6 +866,7 @@ export default function TournamentRegistrations({
     targetId: string,
     orderedList: Registration[]
   ) => {
+    if (registrationsLocked) return;
     event.preventDefault();
     if (draggingCategoryId !== categoryId) return;
     const draggedId =
@@ -794,6 +916,7 @@ export default function TournamentRegistrations({
   };
 
   const addEntry = () => {
+    if (registrationsLocked) return;
     if (editingRegistrationId) return;
     if (!categories.length) return;
     const taken = new Set(entries.map((entry) => entry.categoryId).filter(Boolean));
@@ -811,6 +934,7 @@ export default function TournamentRegistrations({
   };
 
   const removeEntry = (entryId: string) => {
+    if (registrationsLocked) return;
     if (editingRegistrationId) return;
     setEntries((prev) => (prev.length > 1 ? prev.filter((entry) => entry.id !== entryId) : prev));
   };
@@ -847,12 +971,19 @@ export default function TournamentRegistrations({
           </p>
         ) : (
           <div className="mt-4 space-y-4">
+            {registrationsLocked && (
+              <div className="rounded-2xl border border-amber-200/70 bg-amber-50/80 px-4 py-3 text-sm text-amber-700">
+                El torneo esta pagado. Ya no puedes agregar, editar o eliminar
+                inscripciones.
+              </div>
+            )}
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">Jugador</label>
               <input
                 type="text"
                 value={playerQuery}
                 onChange={(e) => handlePlayerQueryChange(e.target.value)}
+                disabled={registrationsLocked}
                 className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
                 placeholder="Busca por nombre o CI"
               />
@@ -874,6 +1005,7 @@ export default function TournamentRegistrations({
                           key={player.id}
                           type="button"
                           onClick={() => selectPlayer(player)}
+                          disabled={registrationsLocked}
                           className="w-full rounded-xl px-2 py-1 text-left text-sm text-slate-700 transition hover:bg-slate-50"
                         >
                           {playerLabel(player)}
@@ -893,7 +1025,9 @@ export default function TournamentRegistrations({
                 type="button"
                 onClick={addEntry}
                 disabled={
-                  editingRegistrationId || selectedCategoryIds.size >= categories.length
+                  editingRegistrationId ||
+                  selectedCategoryIds.size >= categories.length ||
+                  registrationsLocked
                 }
                 className="inline-flex items-center justify-center rounded-full border border-indigo-200/80 bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-700 shadow-sm transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-70"
               >
@@ -939,7 +1073,11 @@ export default function TournamentRegistrations({
                       <button
                         type="button"
                         onClick={() => removeEntry(entry.id)}
-                        disabled={editingRegistrationId !== null || entries.length === 1}
+                        disabled={
+                          editingRegistrationId !== null ||
+                          entries.length === 1 ||
+                          registrationsLocked
+                        }
                         className="rounded-full border border-slate-200/70 bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         Quitar
@@ -954,6 +1092,7 @@ export default function TournamentRegistrations({
                         <select
                           value={entry.categoryId}
                           onChange={(e) => handleCategoryChange(entry.id, e.target.value)}
+                          disabled={registrationsLocked}
                           className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
                         >
                           <option value="">Selecciona categoria</option>
@@ -964,6 +1103,24 @@ export default function TournamentRegistrations({
                           ))}
                         </select>
                       </div>
+
+                      {isFrontonCategory(category) && (
+                        <div className="space-y-2 md:col-span-2">
+                          <label className="text-sm font-medium text-slate-700">
+                            Nombre del equipo
+                          </label>
+                          <input
+                            type="text"
+                            value={entry.teamName}
+                            onChange={(e) =>
+                              updateEntry(entry.id, { teamName: e.target.value })
+                            }
+                            disabled={registrationsLocked}
+                            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                            placeholder="Ej. Team Polanco"
+                          />
+                        </div>
+                      )}
 
                       {teamConfig.maxPlayers > 1 && (
                         <div className="space-y-2">
@@ -979,6 +1136,7 @@ export default function TournamentRegistrations({
                                 partnerId: "",
                               })
                             }
+                            disabled={registrationsLocked}
                             className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
                             placeholder="Busca por nombre o CI"
                           />
@@ -1000,6 +1158,7 @@ export default function TournamentRegistrations({
                                       key={player.id}
                                       type="button"
                                       onClick={() => selectPartner(entry.id, player)}
+                                      disabled={registrationsLocked}
                                       className="w-full rounded-xl px-2 py-1 text-left text-sm text-slate-700 transition hover:bg-slate-50"
                                     >
                                       {playerLabel(player)}
@@ -1026,6 +1185,7 @@ export default function TournamentRegistrations({
                                 partnerTwoId: "",
                               })
                             }
+                            disabled={registrationsLocked}
                             className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
                             placeholder="Busca por nombre o CI"
                           />
@@ -1048,6 +1208,7 @@ export default function TournamentRegistrations({
                                         key={player.id}
                                         type="button"
                                         onClick={() => selectPartnerTwo(entry.id, player)}
+                                        disabled={registrationsLocked}
                                         className="w-full rounded-xl px-2 py-1 text-left text-sm text-slate-700 transition hover:bg-slate-50"
                                       >
                                         {playerLabel(player)}
@@ -1076,7 +1237,7 @@ export default function TournamentRegistrations({
               <button
                 type="button"
                 onClick={cancelEditing}
-                disabled={saving}
+                disabled={saving || registrationsLocked}
                 className="rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
               >
                 Cancelar edicion
@@ -1085,7 +1246,7 @@ export default function TournamentRegistrations({
             <button
               type="button"
               onClick={handleSave}
-              disabled={saving || categories.length === 0}
+              disabled={saving || categories.length === 0 || registrationsLocked}
               className="inline-flex items-center justify-center rounded-full bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-[0_18px_40px_-22px_rgba(15,23,42,0.5)] transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {saving
@@ -1120,6 +1281,50 @@ export default function TournamentRegistrations({
             {registrations.length === 1 ? "registro" : "registros"}
           </p>
         </div>
+
+        {rankingEnabled && leagueId && (
+          <div className="mt-4 rounded-2xl border border-slate-200/70 bg-white/90 p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              Rankear por liga
+            </p>
+            <p className="mt-1 text-sm text-slate-600">
+              Liga:{" "}
+              <span className="font-semibold text-slate-800">
+                {leagueName ?? "Liga seleccionada"}
+              </span>
+            </p>
+            <div className="mt-3 flex flex-wrap items-end gap-3">
+              <div className="min-w-[220px]">
+                <label className="text-xs font-semibold text-slate-600">
+                  Temporada
+                </label>
+                <select
+                  value={selectedSeasonId}
+                  onChange={(event) => setSelectedSeasonId(event.target.value)}
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                >
+                  <option value="">Selecciona temporada</option>
+                  {seasons.map((season) => (
+                    <option key={season.id} value={season.id}>
+                      {season.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                onClick={handleRankByLeague}
+                disabled={rankingLoading || !selectedSeasonId}
+                className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {rankingLoading ? "Rankeando..." : "Rankear por liga"}
+              </button>
+            </div>
+            {rankingError && (
+              <p className="mt-2 text-sm text-red-600">{rankingError}</p>
+            )}
+          </div>
+        )}
 
         {loading ? (
           <p className="mt-3 text-sm text-slate-500">Cargando...</p>
@@ -1172,7 +1377,9 @@ export default function TournamentRegistrations({
                           dragOverId === registration.id &&
                           draggingCategoryId === category.id;
                         const dragDisabled =
-                          saving || reorderingCategoryId === category.id;
+                          saving ||
+                          reorderingCategoryId === category.id ||
+                          registrationsLocked;
                         return (
                           <tr
                             key={registration.id}
@@ -1213,6 +1420,11 @@ export default function TournamentRegistrations({
                                     {index + 1}
                                   </span>
                                   <div className="flex flex-col">
+                                    {registration.teamName && (
+                                      <span className="text-xs font-semibold uppercase tracking-[0.15em] text-indigo-600">
+                                        {registration.teamName}
+                                      </span>
+                                    )}
                                     <span className="font-semibold text-slate-900">
                                       {registration.player.firstName}{" "}
                                       {registration.player.lastName}
@@ -1246,7 +1458,7 @@ export default function TournamentRegistrations({
                               <button
                                 type="button"
                                 onClick={() => startEditing(registration)}
-                                disabled={saving}
+                                disabled={saving || registrationsLocked}
                                 className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
                               >
                                 Editar
@@ -1254,7 +1466,7 @@ export default function TournamentRegistrations({
                               <button
                                 type="button"
                                 onClick={() => handleDelete(registration.id)}
-                                disabled={saving}
+                                disabled={saving || registrationsLocked}
                                 className="ml-2 rounded-full border border-red-200 bg-red-50/60 px-3 py-1.5 text-xs font-semibold text-red-600 shadow-sm transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-70"
                               >
                                 Eliminar
@@ -1315,6 +1527,11 @@ export default function TournamentRegistrations({
                                 {index + 1}
                               </span>
                               <div className="flex flex-col">
+                                {registration.teamName && (
+                                  <span className="text-xs font-semibold uppercase tracking-[0.15em] text-indigo-600">
+                                    {registration.teamName}
+                                  </span>
+                                )}
                                 <span className="font-semibold text-slate-900">
                                   {registration.player.firstName}{" "}
                                   {registration.player.lastName}
@@ -1348,7 +1565,7 @@ export default function TournamentRegistrations({
                           <button
                             type="button"
                             onClick={() => startEditing(registration)}
-                            disabled={saving}
+                            disabled={saving || registrationsLocked}
                             className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
                           >
                             Editar
@@ -1356,7 +1573,7 @@ export default function TournamentRegistrations({
                           <button
                             type="button"
                             onClick={() => handleDelete(registration.id)}
-                            disabled={saving}
+                            disabled={saving || registrationsLocked}
                             className="ml-2 rounded-full border border-red-200 bg-red-50/60 px-3 py-1.5 text-xs font-semibold text-red-600 shadow-sm transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-70"
                           >
                             Eliminar

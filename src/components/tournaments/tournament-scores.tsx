@@ -29,6 +29,7 @@ type Registration = {
   player: Player;
   partner: Player | null;
   partnerTwo: Player | null;
+  teamName?: string | null;
 };
 
 type Category = {
@@ -36,6 +37,7 @@ type Category = {
   name: string;
   abbreviation: string;
   drawType?: DrawType | null;
+  sport?: { id?: string; name?: string } | null;
 };
 
 type Match = {
@@ -58,6 +60,8 @@ type FixtureResponse = {
   categories: Category[];
   registrations: Registration[];
   matches: Match[];
+  tournamentStatus?: "WAITING" | "ACTIVE" | "FINISHED";
+  sessionRole?: "ADMIN" | "TOURNAMENT_ADMIN";
   groupPoints?: {
     winPoints?: number;
     winWithoutGameLossPoints?: number;
@@ -70,6 +74,8 @@ type FixtureResponse = {
 type Props = {
   tournamentId: string;
   tournamentName: string;
+  onStatusChange?: (status: "WAITING" | "ACTIVE" | "FINISHED") => void;
+  onCompletionChange?: (complete: boolean) => void;
 };
 
 type StandingEntry = {
@@ -120,17 +126,46 @@ const TIEBREAKER_LABELS: Record<
 
 const formatTeamName = (registration?: Registration) => {
   if (!registration) return "N/D";
+  const teamName = registration.teamName?.trim();
   const players = [
     registration.player,
     registration.partner,
     registration.partnerTwo,
   ].filter(Boolean) as Player[];
-  return players
+  const playersLabel = players
     .map((player) => `${player.firstName} ${player.lastName}`.trim())
     .join(" / ");
+  if (teamName) {
+    return playersLabel ? `${teamName} (${playersLabel})` : teamName;
+  }
+  return playersLabel || "N/D";
+};
+
+const isFrontonCategory = (category?: Category | null) =>
+  (category?.sport?.name ?? "").toLowerCase().includes("fronton");
+
+const formatGroupTeamName = (
+  registration: Registration | undefined,
+  category?: Category | null
+) => {
+  if (!registration) return "N/D";
+  const teamName = registration.teamName?.trim();
+  if (teamName && isFrontonCategory(category)) {
+    return teamName;
+  }
+  return formatTeamName(registration);
 };
 
 const getGroupKey = (value?: string | null) => value?.trim() || "A";
+
+const isMatchComplete = (match: Match) => {
+  const outcomeType = match.outcomeType ?? "PLAYED";
+  if (outcomeType !== "PLAYED") {
+    return Boolean(match.outcomeSide || match.winnerSide);
+  }
+  if (match.winnerSide) return true;
+  return Array.isArray(match.games) && match.games.length > 0;
+};
 
 const normalizeTiebreakerOrder = (value?: string[]) => {
   const filtered = Array.isArray(value)
@@ -207,10 +242,21 @@ const compareStandings = (
   return a.createdAt.getTime() - b.createdAt.getTime();
 };
 
-export default function TournamentScores({ tournamentId, tournamentName }: Props) {
+export default function TournamentScores({
+  tournamentId,
+  tournamentName,
+  onStatusChange,
+  onCompletionChange,
+}: Props) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
+  const [tournamentStatus, setTournamentStatus] = useState<
+    "WAITING" | "ACTIVE" | "FINISHED"
+  >("WAITING");
+  const [sessionRole, setSessionRole] = useState<
+    "ADMIN" | "TOURNAMENT_ADMIN"
+  >("TOURNAMENT_ADMIN");
   const [groupPoints, setGroupPoints] = useState({
     winPoints: 0,
     winWithoutGameLossPoints: 0,
@@ -220,6 +266,7 @@ export default function TournamentScores({ tournamentId, tournamentName }: Props
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [finishing, setFinishing] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -242,6 +289,12 @@ export default function TournamentScores({ tournamentId, tournamentName }: Props
     setCategories(Array.isArray(data.categories) ? data.categories : []);
     setRegistrations(Array.isArray(data.registrations) ? data.registrations : []);
     setMatches(Array.isArray(data.matches) ? data.matches : []);
+    if (data.tournamentStatus) {
+      setTournamentStatus(data.tournamentStatus);
+    }
+    if (data.sessionRole) {
+      setSessionRole(data.sessionRole);
+    }
     if (data.groupPoints) {
       setGroupPoints({
         winPoints:
@@ -278,9 +331,89 @@ export default function TournamentScores({ tournamentId, tournamentName }: Props
   }, [registrations]);
 
   const groupCategories = useMemo(
-    () => categories.filter((category) => groupDrawTypes.has(category.drawType)),
+    () =>
+      categories.filter((category) =>
+        groupDrawTypes.has(category.drawType ?? "ROUND_ROBIN")
+      ),
     [categories]
   );
+
+  const categoryMap = useMemo(() => {
+    const map = new Map<string, Category>();
+    categories.forEach((category) => {
+      map.set(category.id, category);
+    });
+    return map;
+  }, [categories]);
+
+  const allRoundRobin = useMemo(
+    () =>
+      categories.length > 0 &&
+      categories.every((c) => (c.drawType ?? "ROUND_ROBIN") === "ROUND_ROBIN"),
+    [categories]
+  );
+
+  const groupCompleteByCategory = useMemo(() => {
+    const map = new Map<string, boolean>();
+    const matchesByCategory = new Map<string, Match[]>();
+    matches
+      .filter((match) => match.stage === "GROUP")
+      .forEach((match) => {
+        if (!matchesByCategory.has(match.categoryId)) {
+          matchesByCategory.set(match.categoryId, []);
+        }
+        matchesByCategory.get(match.categoryId)?.push(match);
+      });
+    groupCategories.forEach((category) => {
+      const list = matchesByCategory.get(category.id) ?? [];
+      const hasRegistrations = registrations.some(
+        (registration) => registration.categoryId === category.id
+      );
+      const complete =
+        !hasRegistrations || (list.length > 0 && list.every(isMatchComplete));
+      map.set(category.id, complete);
+    });
+    return map;
+  }, [matches, groupCategories, registrations]);
+
+  const allGroupMatchesComplete = useMemo(
+    () =>
+      groupCategories.length > 0 &&
+      groupCategories.every(
+        (category) => groupCompleteByCategory.get(category.id) === true
+      ),
+    [groupCategories, groupCompleteByCategory]
+  );
+
+  useEffect(() => {
+    if (!onCompletionChange) return;
+    onCompletionChange(allRoundRobin && allGroupMatchesComplete);
+  }, [allRoundRobin, allGroupMatchesComplete, onCompletionChange]);
+
+  const handleFinishTournament = async () => {
+    if (finishing) return;
+    setError(null);
+    setFinishing(true);
+    try {
+      const res = await fetch(`/api/tournaments/${tournamentId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ status: "FINISHED" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const detail = data?.detail ? ` (${data.detail})` : "";
+        throw new Error(`${data?.error ?? "No se pudo finalizar"}${detail}`);
+      }
+      setTournamentStatus("FINISHED");
+      onStatusChange?.("FINISHED");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo finalizar");
+    } finally {
+      setFinishing(false);
+    }
+  };
 
   const standingsByCategory = useMemo(() => {
     const result = new Map<string, Map<string, StandingEntry[]>>();
@@ -428,6 +561,19 @@ export default function TournamentScores({ tournamentId, tournamentName }: Props
     return result;
   }, [groupCategories, registrations, matches, groupPoints]);
 
+  const overallStandingsByCategory = useMemo(() => {
+    const map = new Map<string, StandingEntry[]>();
+    standingsByCategory.forEach((groups, categoryId) => {
+      const entries = Array.from(groups.values()).flat();
+      if (!entries.length) return;
+      const ordered = [...entries].sort((a, b) =>
+        compareStandings(a, b, groupPoints.tiebreakerOrder)
+      );
+      map.set(categoryId, ordered);
+    });
+    return map;
+  }, [standingsByCategory, groupPoints.tiebreakerOrder]);
+
   if (loading) {
     return <p className="text-sm text-slate-500">Cargando posiciones...</p>;
   }
@@ -455,6 +601,24 @@ export default function TournamentScores({ tournamentId, tournamentName }: Props
         <p className="mt-3 text-sm text-slate-600">
           Posiciones por grupo con sets y puntos acumulados.
         </p>
+        {allRoundRobin &&
+          allGroupMatchesComplete &&
+          tournamentStatus === "ACTIVE" &&
+          (sessionRole === "ADMIN" || sessionRole === "TOURNAMENT_ADMIN") && (
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleFinishTournament}
+              disabled={finishing}
+              className="rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {finishing ? "Finalizando..." : "Terminar torneo"}
+            </button>
+            <span className="text-xs text-slate-500">
+              Disponible cuando todos los partidos de grupos estan completados.
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
@@ -689,6 +853,7 @@ export default function TournamentScores({ tournamentId, tournamentName }: Props
                           <tbody className="divide-y divide-slate-100 bg-white">
                             {entries.map((entry, index) => {
                               const registration = registrationMap.get(entry.id);
+                              const category = categoryMap.get(entry.categoryId);
                               const setDiff = entry.setsWon - entry.setsLost;
                               const diff = entry.pointsWon - entry.pointsLost;
                               return (
@@ -700,7 +865,7 @@ export default function TournamentScores({ tournamentId, tournamentName }: Props
                                     {index + 1}
                                   </td>
                                   <td className="px-2 py-2 font-semibold text-slate-900">
-                                    {formatTeamName(registration)}
+                                    {formatGroupTeamName(registration, category)}
                                   </td>
                                   <td className="px-2 py-2 text-center text-slate-700 tabular-nums">
                                     {entry.matchesPlayed}
@@ -746,6 +911,83 @@ export default function TournamentScores({ tournamentId, tournamentName }: Props
             </div>
           );
         })
+      )}
+
+      {allRoundRobin && (
+        <div className="admin-fade-up rounded-[24px] border border-white/70 bg-white/80 p-6 shadow-[0_18px_50px_-36px_rgba(15,23,42,0.35)] ring-1 ring-slate-200/70 backdrop-blur">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              Tabla general
+            </span>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+              Solo grupos
+            </span>
+          </div>
+          <div className="mt-4 space-y-4">
+            {groupCategories.map((category) => {
+              const isComplete = groupCompleteByCategory.get(category.id) === true;
+              const rows = overallStandingsByCategory.get(category.id) ?? [];
+              if (!isComplete) return null;
+              return (
+                <div
+                  key={`overall-${category.id}`}
+                  className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white/80 shadow-[0_14px_36px_-28px_rgba(15,23,42,0.25)]"
+                >
+                  <div className="flex items-center justify-between gap-2 bg-slate-50/80 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {category.name}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {category.abbreviation}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-slate-600">
+                      General
+                    </span>
+                  </div>
+                  <table className="min-w-full divide-y divide-slate-200/70 text-sm">
+                    <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.2em] text-slate-500">
+                      <tr>
+                        <th className="px-2 py-2 text-left font-semibold">Pos</th>
+                        <th className="px-2 py-2 text-left font-semibold">Equipo</th>
+                        <th className="px-2 py-2 text-center font-semibold">Pts</th>
+                        <th className="px-2 py-2 text-center font-semibold">PJ</th>
+                        <th className="px-2 py-2 text-center font-semibold">PG</th>
+                        <th className="px-2 py-2 text-center font-semibold">PP</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {rows.map((entry, index) => {
+                        const registration = registrationMap.get(entry.id);
+                        return (
+                          <tr key={`overall-${entry.id}`}>
+                            <td className="px-2 py-2 text-slate-500">{index + 1}</td>
+                            <td className="px-2 py-2 font-semibold text-slate-900">
+                              {formatGroupTeamName(registration, category)}
+                            </td>
+                            <td className="px-2 py-2 text-center font-semibold text-slate-900">
+                              {entry.points}
+                            </td>
+                            <td className="px-2 py-2 text-center text-slate-700">
+                              {entry.matchesPlayed}
+                            </td>
+                            <td className="px-2 py-2 text-center text-slate-700">
+                              {entry.matchesWon}
+                            </td>
+                            <td className="px-2 py-2 text-center text-slate-700">
+                              {entry.matchesLost}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       {error && (

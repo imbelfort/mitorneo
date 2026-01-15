@@ -8,6 +8,7 @@ type RegistrationInput = {
   playerId?: unknown;
   partnerId?: unknown;
   partnerTwoId?: unknown;
+  teamName?: unknown;
   amountPaid?: unknown;
   amountDue?: unknown;
   seed?: unknown;
@@ -152,7 +153,7 @@ export async function GET(
 
   const tournament = await prisma.tournament.findUnique({
     where: { id: tournamentId },
-    select: { id: true, ownerId: true },
+    select: { id: true, ownerId: true, status: true },
   });
 
   if (!tournament) {
@@ -161,6 +162,12 @@ export async function GET(
 
   if (session.user.role !== "ADMIN" && tournament.ownerId !== session.user.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  }
+  if (tournament.status === "ACTIVE" || tournament.status === "FINISHED") {
+    return NextResponse.json(
+      { error: "El torneo ya esta pagado y no permite mas inscripciones" },
+      { status: 400 }
+    );
   }
 
   const registrations = await prisma.tournamentRegistration.findMany({
@@ -203,7 +210,16 @@ export async function POST(
   }
 
   const body = await request.json().catch(() => ({}));
-  const { categoryId, playerId, partnerId, partnerTwoId, amountPaid, amountDue, seed } =
+  const {
+    categoryId,
+    playerId,
+    partnerId,
+    partnerTwoId,
+    teamName,
+    amountPaid,
+    amountDue,
+    seed,
+  } =
     body as RegistrationInput;
 
   if (!categoryId || typeof categoryId !== "string") {
@@ -228,6 +244,18 @@ export async function POST(
   }
 
   const teamConfig = getTeamConfig(tournamentCategory.category);
+  const isFronton =
+    (tournamentCategory.category.sport?.name ?? "")
+      .toLowerCase()
+      .includes("fronton");
+  const teamNameValue =
+    typeof teamName === "string" ? teamName.trim() : "";
+  if (isFronton && !teamNameValue) {
+    return NextResponse.json(
+      { error: "Nombre de equipo requerido" },
+      { status: 400 }
+    );
+  }
   const playerIdValue = playerId.trim();
   const partnerIdValue = parseOptionalId(partnerId);
   const partnerTwoIdValue = parseOptionalId(partnerTwoId);
@@ -377,6 +405,7 @@ export async function POST(
       playerId: playerIdValue,
       partnerId: partnerIdValue,
       partnerTwoId: partnerTwoIdValue,
+      teamName: teamNameValue || null,
       amountPaid: parsedAmount.toFixed(2),
       amountDue:
         amountDueValue === null ? null : amountDueValue?.toFixed(2) ?? null,

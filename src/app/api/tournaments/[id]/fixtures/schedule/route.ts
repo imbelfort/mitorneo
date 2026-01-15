@@ -369,10 +369,11 @@ const buildBracketMatchesTemplate = (
     for (let index = 0; index < matchesCount; index += 1) {
       const left = prev[index * 2];
       const right = prev[index * 2 + 1];
+      const isImmediateFromRoundOne = round === 2;
       current.push({
         roundNumber: round,
-        teamAId: resolveByeWinner(left),
-        teamBId: resolveByeWinner(right),
+        teamAId: isImmediateFromRoundOne ? resolveByeWinner(left) : null,
+        teamBId: isImmediateFromRoundOne ? resolveByeWinner(right) : null,
       });
     }
     rounds.push(current);

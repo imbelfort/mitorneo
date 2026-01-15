@@ -2,6 +2,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
+import { GET as getFixturePdf } from "./pdf/route";
 
 const DEFAULT_TIEBREAKERS = [
   "SETS_DIFF",
@@ -42,6 +43,10 @@ export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+  const url = new URL(request.url);
+  if (url.searchParams.get("format") === "pdf") {
+    return getFixturePdf(request, { params });
+  }
   const session = await getServerSession(authOptions);
   if (
     !session?.user ||
@@ -57,7 +62,13 @@ export async function GET(
 
   const tournament = await prisma.tournament.findUnique({
     where: { id: tournamentId },
-    select: { id: true, ownerId: true, playDays: true },
+    select: {
+      id: true,
+      ownerId: true,
+      playDays: true,
+      status: true,
+      paymentRate: true,
+    },
   });
 
   if (!tournament) {
@@ -95,6 +106,7 @@ export async function GET(
       seed: true,
       rankingNumber: true,
       createdAt: true,
+      teamName: true,
       player: {
         select: {
           id: true,
@@ -160,6 +172,7 @@ export async function GET(
       clubId: true,
       courtNumber: true,
       createdAt: true,
+      isBronzeMatch: true,
     },
   });
 
@@ -177,6 +190,9 @@ export async function GET(
   const playDays = Array.isArray(tournament.playDays) ? tournament.playDays : [];
 
   return NextResponse.json({
+    tournamentStatus: tournament.status,
+    paymentRate: tournament.paymentRate.toString(),
+    sessionRole: session.user.role,
     playDays,
     groupPoints: {
       winPoints: groupPoints?.winPoints ?? 0,
@@ -194,6 +210,7 @@ export async function GET(
       sport: item.category.sport,
       drawType: item.drawType,
       groupQualifiers: item.groupQualifiers ?? 2,
+      hasBronzeMatch: item.hasBronzeMatch,
     })),
     groupQualifiers: groupQualifiers.map((entry) => ({
       categoryId: entry.categoryId,
@@ -215,11 +232,13 @@ export async function GET(
       player: registration.player,
       partner: registration.partner,
       partnerTwo: registration.partnerTwo,
+      teamName: registration.teamName,
     })),
     matches: matches.map((match) => ({
       id: match.id,
       categoryId: match.categoryId,
       groupName: match.groupName,
+      isBronzeMatch: match.isBronzeMatch,
       stage: match.stage,
       winnerSide: match.winnerSide,
       outcomeType: match.outcomeType,

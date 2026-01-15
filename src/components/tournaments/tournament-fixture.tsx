@@ -21,6 +21,7 @@ type Registration = {
   player: Player;
   partner: Player | null;
   partnerTwo: Player | null;
+  teamName?: string | null;
 };
 
 type Category = {
@@ -53,6 +54,9 @@ type FixtureResponse = {
   registrations: Registration[];
   matches?: Match[];
   groupQualifiers?: GroupQualifier[];
+  tournamentStatus?: "WAITING" | "ACTIVE" | "FINISHED";
+  paymentRate?: string;
+  sessionRole?: "ADMIN" | "TOURNAMENT_ADMIN";
 };
 
 type Props = {
@@ -64,23 +68,46 @@ const groupDrawTypes = new Set<DrawType>(["ROUND_ROBIN", "GROUPS_PLAYOFF"]);
 
 const formatTeamName = (registration?: Registration) => {
   if (!registration) return "N/D";
+  const teamName = registration.teamName?.trim();
   const players = [
     registration.player,
     registration.partner,
     registration.partnerTwo,
   ].filter(Boolean) as Player[];
-  return players
+  const playersLabel = players
     .map((player) => `${player.firstName} ${player.lastName}`.trim())
     .join(" / ");
+  if (teamName) {
+    return playersLabel ? `${teamName} (${playersLabel})` : teamName;
+  }
+  return playersLabel || "N/D";
 };
 
 const getGroupKey = (value?: string | null) => value?.trim() || "A";
+
+const countRegistrationPlayers = (registration: Registration) => {
+  let count = 0;
+  if (registration.player) count += 1;
+  if (registration.partner) count += 1;
+  if (registration.partnerTwo) count += 1;
+  return count;
+};
 
 export default function TournamentFixture({ tournamentId, tournamentName }: Props) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [groupQualifiers, setGroupQualifiers] = useState<GroupQualifier[]>([]);
+  const [tournamentStatus, setTournamentStatus] = useState<
+    "WAITING" | "ACTIVE" | "FINISHED"
+  >("WAITING");
+  const [paymentRate, setPaymentRate] = useState("0");
+  const [sessionRole, setSessionRole] = useState<
+    "ADMIN" | "TOURNAMENT_ADMIN"
+  >("TOURNAMENT_ADMIN");
+  const [paymentQrUrl, setPaymentQrUrl] = useState<string | null>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
   const [loading, setLoading] = useState(false);
   const [autoGroupingId, setAutoGroupingId] = useState<string | null>(null);
   const [generatingAll, setGeneratingAll] = useState(false);
@@ -99,12 +126,18 @@ export default function TournamentFixture({ tournamentId, tournamentName }: Prop
   const loadData = async () => {
     setLoading(true);
     setError(null);
-    const res = await fetch(`/api/tournaments/${tournamentId}/fixtures`, {
-      cache: "no-store",
-    });
-    const data = (await res.json().catch(() => ({}))) as FixtureResponse;
+    const [fixtureRes, settingsRes] = await Promise.all([
+      fetch(`/api/tournaments/${tournamentId}/fixtures`, {
+        cache: "no-store",
+      }),
+      fetch(`/api/settings/payment-rate`, { cache: "no-store" }),
+    ]);
+    const data = (await fixtureRes.json().catch(() => ({}))) as FixtureResponse;
+    const settingsData = (await settingsRes.json().catch(() => ({}))) as {
+      paymentQrUrl?: string | null;
+    };
     setLoading(false);
-    if (!res.ok) {
+    if (!fixtureRes.ok) {
       const detail = (data as { detail?: string })?.detail
         ? ` (${(data as { detail?: string }).detail})`
         : "";
@@ -113,6 +146,14 @@ export default function TournamentFixture({ tournamentId, tournamentName }: Prop
       );
       return;
     }
+    if (settingsRes.ok) {
+      setPaymentQrUrl(
+        typeof settingsData.paymentQrUrl === "string" &&
+          settingsData.paymentQrUrl.trim().length > 0
+          ? settingsData.paymentQrUrl
+          : null
+      );
+    }
 
     setCategories(Array.isArray(data.categories) ? data.categories : []);
     setRegistrations(Array.isArray(data.registrations) ? data.registrations : []);
@@ -120,6 +161,15 @@ export default function TournamentFixture({ tournamentId, tournamentName }: Prop
     setGroupQualifiers(
       Array.isArray(data.groupQualifiers) ? data.groupQualifiers : []
     );
+    if (data.tournamentStatus) {
+      setTournamentStatus(data.tournamentStatus);
+    }
+    if (data.paymentRate !== undefined) {
+      setPaymentRate(String(data.paymentRate));
+    }
+    if (data.sessionRole) {
+      setSessionRole(data.sessionRole);
+    }
   };
 
   useEffect(() => {
@@ -141,6 +191,15 @@ export default function TournamentFixture({ tournamentId, tournamentName }: Prop
     }
     return map;
   }, [registrations]);
+
+  const totalPlayers = useMemo(
+    () =>
+      registrations.reduce(
+        (sum, registration) => sum + countRegistrationPlayers(registration),
+        0
+      ),
+    [registrations]
+  );
 
   const matchesByCategory = useMemo(() => {
     const map = new Map<string, Match[]>();
@@ -218,6 +277,10 @@ export default function TournamentFixture({ tournamentId, tournamentName }: Prop
 
   const generateAllFixtures = async () => {
     if (groupCategories.length === 0) return;
+    if (tournamentStatus === "WAITING") {
+      setShowPaymentModal(true);
+      return;
+    }
     setGeneratingAll(true);
     setError(null);
     setMessage(null);
@@ -237,6 +300,34 @@ export default function TournamentFixture({ tournamentId, tournamentName }: Prop
     } finally {
       setGeneratingAll(false);
     }
+  };
+
+  const handleFinalizePayment = async () => {
+    if (sessionRole !== "ADMIN") return;
+    setUpdatingStatus(true);
+    setError(null);
+    setMessage(null);
+    const res = await fetch(`/api/tournaments/${tournamentId}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ status: "ACTIVE" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setUpdatingStatus(false);
+    if (!res.ok) {
+      const detail = data?.detail ? ` (${data.detail})` : "";
+      setError(`${data?.error ?? "No se pudo activar el torneo"}${detail}`);
+      return;
+    }
+    setTournamentStatus("ACTIVE");
+    setShowPaymentModal(false);
+    setMessage("Torneo activado");
+  };
+
+  const handlePaymentReported = () => {
+    setShowPaymentModal(false);
+    setMessage("Pago reportado. Un administrador debe activar el torneo.");
   };
 
   const handleQualifiersChange = async (
@@ -405,6 +496,15 @@ export default function TournamentFixture({ tournamentId, tournamentName }: Prop
             >
               {generatingAll ? "Generando..." : "Generar fixture"}
             </button>
+            {tournamentStatus === "WAITING" && (
+              <button
+                type="button"
+                onClick={() => setShowPaymentModal(true)}
+                className="inline-flex items-center justify-center rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 shadow-sm transition hover:border-amber-300"
+              >
+                Ver pago
+              </button>
+            )}
             <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
               Grupos
             </span>
@@ -718,6 +818,91 @@ export default function TournamentFixture({ tournamentId, tournamentName }: Prop
             </div>
           );
         })
+      )}
+
+      {showPaymentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-6">
+          <div className="w-full max-w-lg rounded-3xl border border-white/60 bg-white/95 p-6 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+                  Pago del torneo
+                </p>
+                <h3 className="text-xl font-semibold text-slate-900">
+                  {tournamentName}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPaymentModal(false)}
+                className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
+              >
+                Cerrar
+              </button>
+            </div>
+            <div className="mt-4 space-y-4">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                <p className="text-sm text-slate-600">Jugadores inscritos</p>
+                <p className="text-2xl font-semibold text-slate-900">
+                  {totalPlayers}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                <p className="text-sm text-slate-600">Monto por jugador</p>
+                <p className="text-2xl font-semibold text-slate-900">
+                  {Number.parseFloat(paymentRate).toFixed(2)} Bs
+                </p>
+              </div>
+              <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/80 p-4">
+                <p className="text-sm text-emerald-700">Total a pagar</p>
+                <p className="text-2xl font-semibold text-emerald-900">
+                  {(Number.parseFloat(paymentRate) * totalPlayers).toFixed(2)} Bs
+                </p>
+              </div>
+              {paymentQrUrl && (
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-sm text-slate-600">QR de pago</p>
+                  <div className="mt-3 flex h-40 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50">
+                    <img
+                      src={paymentQrUrl}
+                      alt="QR de pago"
+                      className="max-h-36 object-contain"
+                    />
+                  </div>
+                </div>
+              )}
+              {sessionRole !== "ADMIN" && (
+                <p className="text-xs text-amber-600">
+                  Solo el administrador general puede activar el torneo.
+                </p>
+              )}
+              <p className="text-xs text-slate-500">
+                Al reportar el pago ya no podras agregar mas jugadores.
+              </p>
+            </div>
+            <div className="mt-6 flex items-center justify-end gap-2">
+              {sessionRole !== "ADMIN" && (
+                <button
+                  type="button"
+                  onClick={handlePaymentReported}
+                  className="rounded-full bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-700"
+                >
+                  Pago realizada
+                </button>
+              )}
+              {sessionRole === "ADMIN" && (
+                <button
+                  type="button"
+                  onClick={handleFinalizePayment}
+                  disabled={updatingStatus}
+                  className="rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {updatingStatus ? "Activando..." : "Pago finalizado"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {error && (

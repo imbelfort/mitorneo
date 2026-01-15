@@ -1,0 +1,483 @@
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth";
+import { NextResponse } from "next/server";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+
+export const runtime = "nodejs";
+
+type MatchStage = "GROUP" | "PLAYOFF";
+
+type Registration = {
+  id: string;
+  player: { firstName: string; lastName: string };
+  partner: { firstName: string; lastName: string } | null;
+  partnerTwo: { firstName: string; lastName: string } | null;
+  teamName?: string | null;
+};
+
+const formatTeamName = (registration?: Registration | null) => {
+  if (!registration) return "Por definir";
+  const teamName = registration.teamName?.trim();
+  const players = [
+    registration.player,
+    registration.partner,
+    registration.partnerTwo,
+  ].filter(Boolean) as { firstName: string; lastName: string }[];
+  const playersLabel = players
+    .map((player) => `${player.firstName} ${player.lastName}`)
+    .join(" / ");
+  if (teamName) {
+    return playersLabel ? `${teamName} (${playersLabel})` : teamName;
+  }
+  return playersLabel || "Por definir";
+};
+
+const nextPowerOfTwo = (value: number) => {
+  if (value <= 1) return 1;
+  let size = 1;
+  while (size < value) size *= 2;
+  return size;
+};
+
+const formatPlayoffRoundLabel = (roundSize: number, roundNumber: number) => {
+  if (roundSize === 2) return "Final";
+  if (roundSize === 4) return "Semifinal";
+  if (roundSize === 8) return "Cuartos";
+  if (roundSize === 16) return "Ronda de 16";
+  if (roundSize === 32) return "Ronda de 32";
+  if (roundSize === 64) return "Ronda de 64";
+  if (roundSize > 1) return `Ronda de ${roundSize}`;
+  return `Ronda ${roundNumber}`;
+};
+
+const formatPrintDate = (value: string) => {
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  const weekdays = [
+    "domingo",
+    "lunes",
+    "martes",
+    "miercoles",
+    "jueves",
+    "viernes",
+    "sabado",
+  ];
+  const months = [
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "octubre",
+    "noviembre",
+    "diciembre",
+  ];
+  return `${weekdays[date.getDay()]} ${date.getDate()} de ${
+    months[date.getMonth()]
+  } del ${date.getFullYear()}`;
+};
+
+const resolveId = async (
+  request: Request,
+  params?: { id?: string } | Promise<{ id?: string }>
+) => {
+  if (params) {
+    const resolved =
+      typeof (params as Promise<{ id?: string }>).then === "function"
+        ? await (params as Promise<{ id?: string }>)
+        : (params as { id?: string });
+    if (resolved?.id) return resolved.id;
+  }
+  const url = new URL(request.url);
+  const parts = url.pathname.split("/").filter(Boolean);
+  return parts.length ? parts[parts.length - 2] : undefined;
+};
+
+const fetchImage = async (url: string) => {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const contentType = res.headers.get("content-type") ?? "";
+    const buffer = await res.arrayBuffer();
+    return { contentType, buffer };
+  } catch {
+    return null;
+  }
+};
+
+const isByeMatch = (match: {
+  stage: MatchStage | null;
+  roundNumber: number | null;
+  teamAId?: string | null;
+  teamBId?: string | null;
+  isBronzeMatch?: boolean | null;
+}) => {
+  if (match.stage !== "PLAYOFF" || match.isBronzeMatch) return false;
+  const round = match.roundNumber ?? 1;
+  if (round !== 1) return false;
+  const hasA = Boolean(match.teamAId);
+  const hasB = Boolean(match.teamBId);
+  return (hasA && !hasB) || (hasB && !hasA);
+};
+
+export async function GET(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  const session = await getServerSession(authOptions);
+  if (
+    !session?.user ||
+    (session.user.role !== "ADMIN" && session.user.role !== "TOURNAMENT_ADMIN")
+  ) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  }
+
+  const tournamentId = await resolveId(request, params);
+  if (!tournamentId) {
+    return NextResponse.json({ error: "Torneo no encontrado" }, { status: 404 });
+  }
+
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+    select: {
+      id: true,
+      ownerId: true,
+      name: true,
+      league: {
+        select: { name: true, photoUrl: true },
+      },
+    },
+  });
+
+  if (!tournament) {
+    return NextResponse.json({ error: "Torneo no encontrado" }, { status: 404 });
+  }
+
+  if (session.user.role !== "ADMIN" && tournament.ownerId !== session.user.id) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  }
+
+  const categories = await prisma.tournamentCategory.findMany({
+    where: { tournamentId },
+    select: {
+      drawType: true,
+      groupQualifiers: true,
+      category: {
+        select: {
+          id: true,
+          name: true,
+          abbreviation: true,
+        },
+      },
+    },
+  });
+
+  const registrations = await prisma.tournamentRegistration.findMany({
+    where: { tournamentId },
+    select: {
+      id: true,
+      teamName: true,
+      categoryId: true,
+      groupName: true,
+      player: { select: { firstName: true, lastName: true } },
+      partner: { select: { firstName: true, lastName: true } },
+      partnerTwo: { select: { firstName: true, lastName: true } },
+    },
+  });
+
+  const qualifiers = await prisma.tournamentGroupQualifier.findMany({
+    where: { tournamentId },
+    select: { categoryId: true, groupName: true, qualifiers: true },
+  });
+
+  const clubs = await prisma.tournamentClub.findMany({
+    where: { tournamentId },
+    select: { id: true, name: true },
+  });
+
+  const matches = await prisma.tournamentMatch.findMany({
+    where: { tournamentId },
+    orderBy: [
+      { scheduledDate: "asc" },
+      { startTime: "asc" },
+      { createdAt: "asc" },
+    ],
+    select: {
+      id: true,
+      categoryId: true,
+      groupName: true,
+      stage: true,
+      roundNumber: true,
+      scheduledDate: true,
+      startTime: true,
+      teamAId: true,
+      teamBId: true,
+      clubId: true,
+      courtNumber: true,
+      isBronzeMatch: true,
+    },
+  });
+
+  const categoryMap = new Map(
+    categories.map((item) => [item.category.id, item.category])
+  );
+  const registrationMap = new Map(
+    registrations.map((registration) => [registration.id, registration])
+  );
+  const clubMap = new Map(clubs.map((club) => [club.id, club.name]));
+  const qualifiersByGroup = new Map(
+    qualifiers.map((entry) => [
+      `${entry.categoryId}:${(entry.groupName || "A").trim() || "A"}`,
+      entry.qualifiers,
+    ])
+  );
+
+  const qualifiedCountByCategory = new Map<string, number>();
+  categories.forEach((category) => {
+    if (category.drawType === "PLAYOFF") {
+      const count = registrations.filter(
+        (registration) => registration.categoryId === category.category.id
+      ).length;
+      qualifiedCountByCategory.set(category.category.id, count);
+      return;
+    }
+    if (category.drawType !== "GROUPS_PLAYOFF") return;
+    const categoryRegistrations = registrations.filter(
+      (registration) => registration.categoryId === category.category.id
+    );
+    const groupCounts = new Map<string, number>();
+    categoryRegistrations.forEach((registration) => {
+      const groupName = (registration.groupName || "A").trim() || "A";
+      groupCounts.set(groupName, (groupCounts.get(groupName) ?? 0) + 1);
+    });
+    let total = 0;
+    const defaultQualifiers =
+      typeof category.groupQualifiers === "number" && category.groupQualifiers > 0
+        ? category.groupQualifiers
+        : 2;
+    groupCounts.forEach((count, groupName) => {
+      const qualifiersCount =
+        qualifiersByGroup.get(`${category.category.id}:${groupName}`) ??
+        defaultQualifiers;
+      total += Math.min(count, Math.max(1, qualifiersCount));
+    });
+    qualifiedCountByCategory.set(category.category.id, total);
+  });
+
+  const playoffRoundLabels = new Map<string, Map<number, string>>();
+  const byCategory = new Map<string, typeof matches>();
+  matches
+    .filter((match) => match.stage === "PLAYOFF")
+    .forEach((match) => {
+      if (!byCategory.has(match.categoryId)) {
+        byCategory.set(match.categoryId, []);
+      }
+      byCategory.get(match.categoryId)?.push(match);
+    });
+
+  byCategory.forEach((list, categoryId) => {
+    const roundCounts = new Map<number, number>();
+    list.forEach((match) => {
+      const round = match.roundNumber ?? 1;
+      roundCounts.set(round, (roundCounts.get(round) ?? 0) + 1);
+    });
+    const rounds = Array.from(roundCounts.keys()).sort((a, b) => a - b);
+    if (rounds.length === 0) return;
+    const qualifiedCount = qualifiedCountByCategory.get(categoryId) ?? 0;
+    const bracketSize = qualifiedCount > 1 ? nextPowerOfTwo(qualifiedCount) : 0;
+    if (bracketSize < 2) return;
+    const labelMap = new Map<number, string>();
+    rounds.forEach((round) => {
+      const roundSize = Math.round(bracketSize / 2 ** (round - (rounds[0] ?? 1)));
+      labelMap.set(round, formatPlayoffRoundLabel(roundSize, round));
+    });
+    playoffRoundLabels.set(categoryId, labelMap);
+  });
+
+  const scheduledMatches = matches
+    .filter((match) => match.scheduledDate && match.startTime && match.clubId)
+    .filter((match) => !isByeMatch(match))
+    .sort((a, b) => {
+      const dateA = a.scheduledDate ? a.scheduledDate.getTime() : 0;
+      const dateB = b.scheduledDate ? b.scheduledDate.getTime() : 0;
+      if (dateA !== dateB) return dateA - dateB;
+      if (a.startTime !== b.startTime) {
+        return (a.startTime ?? "").localeCompare(b.startTime ?? "");
+      }
+      const clubA = clubMap.get(a.clubId ?? "") ?? "";
+      const clubB = clubMap.get(b.clubId ?? "") ?? "";
+      if (clubA !== clubB) return clubA.localeCompare(clubB);
+      return (a.courtNumber ?? 0) - (b.courtNumber ?? 0);
+    });
+
+  const grouped = new Map<string, typeof scheduledMatches>();
+  scheduledMatches.forEach((match) => {
+    const date = match.scheduledDate?.toISOString().split("T")[0];
+    if (!date) return;
+    if (!grouped.has(date)) grouped.set(date, []);
+    grouped.get(date)?.push(match);
+  });
+
+  const pdfDoc = await PDFDocument.create();
+  const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+  const leagueLogo =
+    tournament.league?.photoUrl ? await fetchImage(tournament.league.photoUrl) : null;
+  let embeddedLogo: { width: number; height: number; image: any } | null = null;
+  if (leagueLogo) {
+    if (leagueLogo.contentType.includes("png")) {
+      const image = await pdfDoc.embedPng(leagueLogo.buffer);
+      embeddedLogo = { width: image.width, height: image.height, image };
+    } else if (leagueLogo.contentType.includes("jpeg") || leagueLogo.contentType.includes("jpg")) {
+      const image = await pdfDoc.embedJpg(leagueLogo.buffer);
+      embeddedLogo = { width: image.width, height: image.height, image };
+    }
+  }
+
+  const pageWidth = 595.28;
+  const pageHeight = 841.89;
+  const margin = 36;
+  const columnDefs = [
+    { label: "Hora", width: 40 },
+    { label: "Club", width: 70 },
+    { label: "Cancha", width: 35 },
+    { label: "Categoria", width: 55 },
+    { label: "Grupo", width: 55 },
+    { label: "Equipo 1", width: 115 },
+    { label: "VS", width: 20 },
+    { label: "Equipo 2", width: 115 },
+  ];
+
+  const truncateText = (text: string, width: number, size: number) => {
+    if (fontRegular.widthOfTextAtSize(text, size) <= width) return text;
+    let clipped = text;
+    while (clipped.length > 0 && fontRegular.widthOfTextAtSize(`${clipped}...`, size) > width) {
+      clipped = clipped.slice(0, -1);
+    }
+    return `${clipped}...`;
+  };
+
+  const drawHeader = (page: any, dateLabel: string) => {
+    let y = pageHeight - margin;
+    if (embeddedLogo) {
+      const logoSize = 40;
+      const ratio = embeddedLogo.width / embeddedLogo.height;
+      const logoWidth = logoSize * ratio;
+      page.drawImage(embeddedLogo.image, {
+        x: pageWidth - margin - logoWidth,
+        y: y - logoSize + 6,
+        width: logoWidth,
+        height: logoSize,
+      });
+    }
+    page.drawText(`Fixture del torneo ${tournament.name}`, {
+      x: margin,
+      y,
+      size: 10,
+      font: fontRegular,
+      color: rgb(0.28, 0.33, 0.39),
+    });
+    y -= 16;
+    page.drawText(dateLabel, {
+      x: margin,
+      y,
+      size: 12,
+      font: fontRegular,
+      color: rgb(0.06, 0.09, 0.14),
+    });
+    y -= 18;
+    let x = margin;
+    columnDefs.forEach((col) => {
+      page.drawText(col.label, {
+        x,
+        y,
+        size: 9,
+        font: fontRegular,
+        color: rgb(0.39, 0.45, 0.51),
+      });
+      x += col.width;
+    });
+    y -= 8;
+    page.drawLine({
+      start: { x: margin, y },
+      end: { x: pageWidth - margin, y },
+      thickness: 1,
+      color: rgb(0.89, 0.91, 0.94),
+    });
+    y -= 8;
+    return y;
+  };
+
+  const drawRow = (page: any, y: number, row: string[]) => {
+    let x = margin;
+    row.forEach((value, index) => {
+      const width = columnDefs[index]?.width ?? 60;
+      const text = truncateText(value, width, 9);
+      page.drawText(text, {
+        x,
+        y,
+        size: 9,
+        font: fontRegular,
+        color: rgb(0.06, 0.09, 0.14),
+      });
+      x += width;
+    });
+    return y - 14;
+  };
+
+  if (grouped.size === 0) {
+    const page = pdfDoc.addPage([pageWidth, pageHeight]);
+    let y = drawHeader(page, "Sin fechas con partidos");
+    page.drawText("No hay partidos con horario asignado.", {
+      x: margin,
+      y,
+      size: 10,
+      font: fontRegular,
+      color: rgb(0.39, 0.45, 0.51),
+    });
+  } else {
+    for (const [date, dayMatches] of grouped.entries()) {
+      let page = pdfDoc.addPage([pageWidth, pageHeight]);
+      let y = drawHeader(page, formatPrintDate(date));
+      dayMatches.forEach((match) => {
+        if (y < margin + 20) {
+          const newPage = pdfDoc.addPage([pageWidth, pageHeight]);
+          y = drawHeader(newPage, formatPrintDate(date));
+          page = newPage;
+        }
+        const category = categoryMap.get(match.categoryId);
+        const groupLabel =
+          match.stage === "PLAYOFF"
+            ? match.isBronzeMatch
+              ? "Bronce"
+              : playoffRoundLabels.get(match.categoryId)?.get(match.roundNumber ?? 1) ??
+                `Ronda ${match.roundNumber ?? 1}`
+            : match.groupName ?? "-";
+        const row = [
+          match.startTime ?? "",
+          clubMap.get(match.clubId ?? "") ?? "-",
+          match.courtNumber ? String(match.courtNumber) : "-",
+          category?.abbreviation ?? "N/D",
+          groupLabel,
+          formatTeamName(match.teamAId ? registrationMap.get(match.teamAId) : null),
+          "vs",
+          formatTeamName(match.teamBId ? registrationMap.get(match.teamBId) : null),
+        ];
+        y = drawRow(page, y, row);
+      });
+    }
+  }
+
+  const pdfBytes = await pdfDoc.save();
+  return new NextResponse(Buffer.from(pdfBytes), {
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename=\"fixture-${tournamentId}.pdf\"`,
+    },
+  });
+}

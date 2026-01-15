@@ -158,7 +158,7 @@ export async function PATCH(
 
   const tournament = await prisma.tournament.findUnique({
     where: { id: tournamentId },
-    select: { id: true, ownerId: true },
+    select: { id: true, ownerId: true, status: true },
   });
 
   if (!tournament) {
@@ -167,6 +167,12 @@ export async function PATCH(
 
   if (session.user.role !== "ADMIN" && tournament.ownerId !== session.user.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  }
+  if (tournament.status === "ACTIVE" || tournament.status === "FINISHED") {
+    return NextResponse.json(
+      { error: "El torneo ya esta pagado y no permite cambios" },
+      { status: 400 }
+    );
   }
 
   const existingRegistration = await prisma.tournamentRegistration.findUnique({
@@ -179,11 +185,21 @@ export async function PATCH(
   }
 
   const body = await request.json().catch(() => ({}));
-  const { categoryId, playerId, partnerId, partnerTwoId, amountPaid, amountDue, seed } = body as {
+  const {
+    categoryId,
+    playerId,
+    partnerId,
+    partnerTwoId,
+    teamName,
+    amountPaid,
+    amountDue,
+    seed,
+  } = body as {
     categoryId?: unknown;
     playerId?: unknown;
     partnerId?: unknown;
     partnerTwoId?: unknown;
+    teamName?: unknown;
     amountPaid?: unknown;
     amountDue?: unknown;
     seed?: unknown;
@@ -211,6 +227,18 @@ export async function PATCH(
   }
 
   const teamConfig = getTeamConfig(tournamentCategory.category);
+  const isFronton =
+    (tournamentCategory.category.sport?.name ?? "")
+      .toLowerCase()
+      .includes("fronton");
+  const teamNameValue =
+    typeof teamName === "string" ? teamName.trim() : "";
+  if (isFronton && !teamNameValue) {
+    return NextResponse.json(
+      { error: "Nombre de equipo requerido" },
+      { status: 400 }
+    );
+  }
   const playerIdValue = playerId.trim();
   const partnerIdValue = parseOptionalId(partnerId);
   const partnerTwoIdValue = parseOptionalId(partnerTwoId);
@@ -360,6 +388,7 @@ export async function PATCH(
     playerId: playerIdValue,
     partnerId: partnerIdValue,
     partnerTwoId: partnerTwoIdValue,
+    teamName: teamNameValue || null,
     amountPaid: parsedAmount.toFixed(2),
     ...(seedUpdate !== undefined ? { seed: seedUpdate } : {}),
     ...(amountDueResult.provided
@@ -401,7 +430,7 @@ export async function DELETE(
 
   const tournament = await prisma.tournament.findUnique({
     where: { id: tournamentId },
-    select: { id: true, ownerId: true },
+    select: { id: true, ownerId: true, status: true },
   });
 
   if (!tournament) {
@@ -410,6 +439,12 @@ export async function DELETE(
 
   if (session.user.role !== "ADMIN" && tournament.ownerId !== session.user.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  }
+  if (tournament.status === "ACTIVE" || tournament.status === "FINISHED") {
+    return NextResponse.json(
+      { error: "El torneo ya esta pagado y no permite cambios" },
+      { status: 400 }
+    );
   }
 
   const registration = await prisma.tournamentRegistration.findUnique({

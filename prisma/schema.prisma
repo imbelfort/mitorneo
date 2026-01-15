@@ -127,6 +127,12 @@ enum RegistrationRankingType {
   TOURNAMENT
 }
 
+enum TournamentStatus {
+  WAITING
+  ACTIVE
+  FINISHED
+}
+
 model Sport {
   id          String       @id @default(cuid())
   name        String       @unique
@@ -149,6 +155,8 @@ model Tournament {
   rulesText            String?   @db.Text
   playDays             Json?
   rankingEnabled       Boolean   @default(true)
+  paymentRate          Decimal   @default(0) @db.Decimal(10, 2)
+  status               TournamentStatus @default(WAITING)
   ownerId              String
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
@@ -165,6 +173,14 @@ model Tournament {
   groupPoints     TournamentGroupPoints?
   groupQualifiers TournamentGroupQualifier[]
   scheduleDays    TournamentScheduleDay[]
+}
+
+model GlobalSetting {
+  id                 String   @id @default("default")
+  paymentRateDefault Decimal  @default(0) @db.Decimal(10, 2)
+  paymentQrUrl       String?  @db.MediumText
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 model TournamentClub {
@@ -228,6 +244,7 @@ model TournamentCategory {
   groupMinSize    Int?
   groupMaxSize    Int?
   groupQualifiers Int                 @default(2)
+  hasBronzeMatch  Boolean             @default(false)
 
   tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
   category   Category   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
@@ -275,6 +292,7 @@ model TournamentRegistration {
   playerId      String
   partnerId     String?
   partnerTwoId  String?
+  teamName      String?                 @db.VarChar(120)
   amountPaid    Decimal                 @default(0) @db.Decimal(10, 2)
   amountDue     Decimal?                @db.Decimal(10, 2)
   seed          Int?
@@ -316,6 +334,7 @@ model TournamentMatch {
   teamBId       String?
   clubId        String?
   courtNumber   Int?
+  isBronzeMatch Boolean              @default(false)
   createdAt     DateTime             @default(now())
   updatedAt     DateTime             @updatedAt
 
@@ -390,7 +409,7 @@ model League {
   id          String       @id @default(cuid())
   name        String       @unique
   description String?
-  photoUrl    String?
+  photoUrl    String?      @db.LongText
   ownerId     String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
