@@ -56,6 +56,8 @@ type FixtureResponse = {
   categories: Category[];
   registrations: Registration[];
   matches: Match[];
+  tournamentStatus?: "WAITING" | "ACTIVE" | "FINISHED";
+  sessionRole?: "ADMIN" | "TOURNAMENT_ADMIN";
   groupPoints?: {
     winPoints?: number;
     winWithoutGameLossPoints?: number;
@@ -241,6 +243,13 @@ export default function TournamentFinalStandings({
   const [rankingPoints, setRankingPoints] = useState<RankingPoint[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [finishing, setFinishing] = useState(false);
+  const [tournamentStatus, setTournamentStatus] = useState<
+    "WAITING" | "ACTIVE" | "FINISHED"
+  >("WAITING");
+  const [sessionRole, setSessionRole] = useState<"ADMIN" | "TOURNAMENT_ADMIN">(
+    "TOURNAMENT_ADMIN"
+  );
 
   const loadData = async () => {
     setLoading(true);
@@ -272,6 +281,12 @@ export default function TournamentFinalStandings({
       Array.isArray(fixtureData.registrations) ? fixtureData.registrations : []
     );
     setMatches(Array.isArray(fixtureData.matches) ? fixtureData.matches : []);
+    if (fixtureData.tournamentStatus) {
+      setTournamentStatus(fixtureData.tournamentStatus);
+    }
+    if (fixtureData.sessionRole) {
+      setSessionRole(fixtureData.sessionRole);
+    }
     if (fixtureData.groupPoints) {
       setGroupPoints({
         winPoints:
@@ -301,6 +316,48 @@ export default function TournamentFinalStandings({
   useEffect(() => {
     loadData();
   }, [tournamentId]);
+
+  const isMatchComplete = (match: Match) => {
+    const outcomeType = match.outcomeType ?? "PLAYED";
+    if (match.stage !== "GROUP" && (!match.teamAId || !match.teamBId)) {
+      return false;
+    }
+    if (outcomeType !== "PLAYED") {
+      return Boolean(match.outcomeSide || match.winnerSide);
+    }
+    if (match.winnerSide) return true;
+    return Array.isArray(match.games) && match.games.length > 0;
+  };
+
+  const allMatchesComplete = useMemo(
+    () => matches.length > 0 && matches.every((match) => isMatchComplete(match)),
+    [matches]
+  );
+
+  const handleFinishTournament = async () => {
+    if (finishing) return;
+    setError(null);
+    setFinishing(true);
+    try {
+      const res = await fetch(`/api/tournaments/${tournamentId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ status: "FINISHED" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const detail = data?.detail ? ` (${data.detail})` : "";
+        throw new Error(`${data?.error ?? "No se pudo finalizar"}${detail}`);
+      }
+      setTournamentStatus("FINISHED");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo finalizar");
+    } finally {
+      setFinishing(false);
+    }
+  };
+
 
   const standingsByCategory = useMemo(() => {
     const standingsMap = new Map<string, StandingEntry[]>();
@@ -591,7 +648,23 @@ export default function TournamentFinalStandings({
               Torneo: <span className="font-semibold">{tournamentName}</span>
             </p>
           </div>
+          {tournamentStatus === "ACTIVE" &&
+            (sessionRole === "ADMIN" || sessionRole === "TOURNAMENT_ADMIN") && (
+            <button
+              type="button"
+              onClick={handleFinishTournament}
+              disabled={finishing}
+              className="rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {finishing ? "Finalizando..." : "Terminar torneo"}
+            </button>
+          )}
         </div>
+        {!allMatchesComplete && tournamentStatus === "ACTIVE" && (
+          <p className="mt-3 text-xs text-amber-600">
+            Aun hay partidos sin marcador, pero puedes finalizar si ya estas seguro.
+          </p>
+        )}
         <p className="mt-3 text-sm text-slate-600">
           La tabla se calcula con los resultados finales del torneo.
         </p>

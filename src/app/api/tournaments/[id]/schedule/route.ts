@@ -142,7 +142,7 @@ export async function GET(
 
   const tournament = await prisma.tournament.findUnique({
     where: { id: tournamentId },
-    select: { id: true, ownerId: true, playDays: true },
+    select: { id: true, ownerId: true, playDays: true, status: true },
   });
 
   if (!tournament) {
@@ -151,6 +151,12 @@ export async function GET(
 
   if (session.user.role !== "ADMIN" && tournament.ownerId !== session.user.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  }
+  if (tournament.status === "FINISHED") {
+    return NextResponse.json(
+      { error: "El torneo ya esta finalizado" },
+      { status: 400 }
+    );
   }
 
   const playDays = Array.isArray(tournament.playDays)

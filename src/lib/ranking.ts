@@ -463,3 +463,31 @@ export const computePlayerPointsFromTournament = (
 
   return { pointsByPlayer, participants };
 };
+
+export const computePlayerPointsByCategory = (data: TournamentRankingData) => {
+  const pointsByRegistration = computeRegistrationPoints(data);
+  const pointsByPlayerCategory = new Map<string, Map<string, number>>();
+  const participants = new Set<string>();
+
+  data.registrations.forEach((registration) => {
+    const points = pointsByRegistration.get(registration.id) ?? 0;
+    const members = [
+      registration.playerId,
+      registration.partnerId,
+      registration.partnerTwoId,
+    ].filter(Boolean) as string[];
+
+    members.forEach((playerId) => {
+      participants.add(playerId);
+      const categoryMap =
+        pointsByPlayerCategory.get(playerId) ?? new Map<string, number>();
+      categoryMap.set(
+        registration.categoryId,
+        (categoryMap.get(registration.categoryId) ?? 0) + points
+      );
+      pointsByPlayerCategory.set(playerId, categoryMap);
+    });
+  });
+
+  return { pointsByPlayerCategory, participants };
+};

@@ -42,6 +42,7 @@ export default async function TournamentsAdminPage() {
     include: {
       league: { select: { id: true, name: true } },
       clubs: true,
+      sponsors: { orderBy: { sortOrder: "asc" } },
       categories: {
         include: {
           category: {
@@ -75,6 +76,13 @@ export default async function TournamentsAdminPage() {
       ? tournament.playDays.filter((day): day is string => typeof day === "string")
       : [],
     clubs: tournament.clubs,
+    sponsors: tournament.sponsors.map((sponsor) => ({
+      id: sponsor.id,
+      name: sponsor.name,
+      imageUrl: sponsor.imageUrl,
+      linkUrl: sponsor.linkUrl,
+      sortOrder: sponsor.sortOrder,
+    })),
     categories: tournament.categories.map((item) => ({
       categoryId: item.categoryId,
       category: item.category,

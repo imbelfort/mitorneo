@@ -34,7 +34,82 @@ export async function GET(
     return NextResponse.json({ error: "Jugador no encontrado" }, { status: 404 });
   }
 
-  return NextResponse.json({ player });
+  const registrations = await prisma.tournamentRegistration.findMany({
+    where: {
+      OR: [{ playerId: id }, { partnerId: id }, { partnerTwoId: id }],
+    },
+    select: { id: true },
+  });
+
+  let matchesPlayed = 0;
+  let matchesWon = 0;
+  let matchesLost = 0;
+
+  if (registrations.length > 0) {
+    const registrationIds = registrations.map((registration) => registration.id);
+    const matches = await prisma.tournamentMatch.findMany({
+      where: {
+        OR: [
+          { teamAId: { in: registrationIds } },
+          { teamBId: { in: registrationIds } },
+        ],
+      },
+      select: {
+        teamAId: true,
+        teamBId: true,
+        winnerSide: true,
+        outcomeType: true,
+        outcomeSide: true,
+        games: true,
+      },
+    });
+
+    const resolveWinner = (match: {
+      winnerSide: string | null;
+      outcomeType: string | null;
+      outcomeSide: string | null;
+      games: unknown;
+    }) => {
+      if (match.winnerSide) return match.winnerSide;
+      if (match.outcomeType && match.outcomeType !== "PLAYED" && match.outcomeSide) {
+        return match.outcomeSide === "A" ? "B" : "A";
+      }
+      if (!Array.isArray(match.games)) return null;
+      let setsA = 0;
+      let setsB = 0;
+      for (const entry of match.games) {
+        if (!entry || typeof entry !== "object") continue;
+        const a = (entry as { a?: unknown }).a;
+        const b = (entry as { b?: unknown }).b;
+        if (typeof a !== "number" || typeof b !== "number") continue;
+        if (a > b) setsA += 1;
+        if (b > a) setsB += 1;
+      }
+      if (setsA === 0 && setsB === 0) return null;
+      if (setsA === setsB) return null;
+      return setsA > setsB ? "A" : "B";
+    };
+
+    matches.forEach((match) => {
+      if (!match.teamAId || !match.teamBId) return;
+      const winner = resolveWinner(match);
+      if (!winner) return;
+      const isTeamA = registrationIds.includes(match.teamAId);
+      const isTeamB = registrationIds.includes(match.teamBId);
+      if (!isTeamA && !isTeamB) return;
+      matchesPlayed += 1;
+      if ((winner === "A" && isTeamA) || (winner === "B" && isTeamB)) {
+        matchesWon += 1;
+      } else {
+        matchesLost += 1;
+      }
+    });
+  }
+
+  return NextResponse.json({
+    player,
+    stats: { matchesPlayed, matchesWon, matchesLost },
+  });
 }
 
 export async function PATCH(

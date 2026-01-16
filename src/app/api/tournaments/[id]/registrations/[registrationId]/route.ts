@@ -76,6 +76,17 @@ const isSameTeam = (first: string[], second: string[]) => {
   return true;
 };
 
+const hasMemberConflict = (
+  registrations: { playerId: string; partnerId: string | null; partnerTwoId: string | null }[],
+  teamIds: string[]
+) =>
+  registrations.some(
+    (registration) =>
+      teamIds.includes(registration.playerId) ||
+      (registration.partnerId && teamIds.includes(registration.partnerId)) ||
+      (registration.partnerTwoId && teamIds.includes(registration.partnerTwoId))
+  );
+
 const registrationInclude = {
   category: {
     select: {
@@ -359,6 +370,16 @@ export async function PATCH(
     },
     select: { id: true, playerId: true, partnerId: true, partnerTwoId: true },
   });
+
+  const memberConflict = hasMemberConflict(existing, teamIds);
+  if (memberConflict) {
+    return NextResponse.json(
+      {
+        error: "Un jugador ya esta inscrito en esta categoria",
+      },
+      { status: 400 }
+    );
+  }
 
   const duplicate = existing.find((registration) =>
     isSameTeam(

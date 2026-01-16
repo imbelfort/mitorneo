@@ -1,0 +1,178 @@
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+import TournamentPublic from "@/components/tournaments/tournament-public";
+import { prisma } from "@/lib/prisma";
+import { notFound } from "next/navigation";
+
+const toISOStringOrNull = (value?: Date | null) =>
+  value ? value.toISOString() : null;
+
+export default async function TournamentPublicPage({
+  params,
+}: {
+  params: { id: string } | Promise<{ id: string }>;
+}) {
+  const resolvedParams =
+    typeof (params as Promise<{ id: string }>).then === "function"
+      ? await (params as Promise<{ id: string }>)
+      : (params as { id: string });
+
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: resolvedParams?.id },
+    include: {
+      league: { select: { id: true, name: true } },
+      sport: { select: { id: true, name: true } },
+      owner: { select: { name: true, email: true } },
+      clubs: true,
+      sponsors: { orderBy: { sortOrder: "asc" } },
+      categories: {
+        include: {
+          category: {
+            select: {
+              id: true,
+              name: true,
+              abbreviation: true,
+              sport: { select: { id: true, name: true } },
+            },
+          },
+        },
+      },
+      registrations: {
+        orderBy: { createdAt: "asc" },
+        include: {
+          player: { select: { id: true, firstName: true, lastName: true } },
+          partner: { select: { id: true, firstName: true, lastName: true } },
+          partnerTwo: { select: { id: true, firstName: true, lastName: true } },
+        },
+      },
+      matches: {
+        orderBy: [{ scheduledDate: "asc" }, { startTime: "asc" }],
+        include: {
+          club: { select: { id: true, name: true, address: true, courtsCount: true } },
+          category: {
+            select: { id: true, name: true, abbreviation: true },
+          },
+          teamA: {
+            include: {
+              player: { select: { id: true, firstName: true, lastName: true } },
+              partner: { select: { id: true, firstName: true, lastName: true } },
+              partnerTwo: {
+                select: { id: true, firstName: true, lastName: true },
+              },
+            },
+          },
+          teamB: {
+            include: {
+              player: { select: { id: true, firstName: true, lastName: true } },
+              partner: { select: { id: true, firstName: true, lastName: true } },
+              partnerTwo: {
+                select: { id: true, firstName: true, lastName: true },
+              },
+            },
+          },
+        },
+      },
+      prizes: {
+        orderBy: [{ categoryId: "asc" }, { placeFrom: "asc" }],
+        include: {
+          category: { select: { id: true, name: true, abbreviation: true } },
+        },
+      },
+    },
+  });
+
+  if (!tournament) {
+    notFound();
+  }
+
+  const normalized = {
+    id: tournament.id,
+    name: tournament.name,
+    description: tournament.description,
+    address: tournament.address,
+    startDate: toISOStringOrNull(tournament.startDate),
+    endDate: toISOStringOrNull(tournament.endDate),
+    registrationDeadline: toISOStringOrNull(tournament.registrationDeadline),
+    rulesText: tournament.rulesText,
+    playDays: Array.isArray(tournament.playDays)
+      ? tournament.playDays.filter((day): day is string => typeof day === "string")
+      : [],
+    sport: tournament.sport,
+    league: tournament.league,
+    owner: tournament.owner,
+    clubs: tournament.clubs,
+    sponsors: tournament.sponsors.map((sponsor) => ({
+      id: sponsor.id,
+      name: sponsor.name,
+      imageUrl: sponsor.imageUrl,
+      linkUrl: sponsor.linkUrl,
+    })),
+    categories: tournament.categories.map((entry) => ({
+      categoryId: entry.categoryId,
+      price: entry.price.toString(),
+      secondaryPrice: entry.secondaryPrice.toString(),
+      siblingPrice: entry.siblingPrice.toString(),
+      category: entry.category,
+    })),
+    registrations: tournament.registrations.map((registration) => ({
+      id: registration.id,
+      categoryId: registration.categoryId,
+      teamName: registration.teamName,
+      player: registration.player,
+      partner: registration.partner,
+      partnerTwo: registration.partnerTwo,
+      createdAt: registration.createdAt.toISOString(),
+    })),
+    matches: tournament.matches.map((match) => ({
+      id: match.id,
+      categoryId: match.categoryId,
+      groupName: match.groupName,
+      stage: match.stage,
+      isBronzeMatch: match.isBronzeMatch,
+      roundNumber: match.roundNumber,
+      scheduledDate: toISOStringOrNull(match.scheduledDate),
+      startTime: match.startTime,
+      courtNumber: match.courtNumber,
+      club: match.club,
+      games: match.games,
+      winnerSide: match.winnerSide,
+      outcomeType: match.outcomeType,
+      outcomeSide: match.outcomeSide,
+      category: match.category,
+      teamA: match.teamA
+        ? {
+            id: match.teamA.id,
+            categoryId: match.teamA.categoryId,
+            teamName: match.teamA.teamName,
+            player: match.teamA.player,
+            partner: match.teamA.partner,
+            partnerTwo: match.teamA.partnerTwo,
+            createdAt: match.teamA.createdAt.toISOString(),
+          }
+        : null,
+      teamB: match.teamB
+        ? {
+            id: match.teamB.id,
+            categoryId: match.teamB.categoryId,
+            teamName: match.teamB.teamName,
+            player: match.teamB.player,
+            partner: match.teamB.partner,
+            partnerTwo: match.teamB.partnerTwo,
+            createdAt: match.teamB.createdAt.toISOString(),
+          }
+        : null,
+    })),
+    prizes: tournament.prizes.map((prize) => ({
+      id: prize.id,
+      categoryId: prize.categoryId,
+      placeFrom: prize.placeFrom,
+      placeTo: prize.placeTo,
+      amount: prize.amount ? prize.amount.toString() : null,
+      prizeText: prize.prizeText,
+      category: prize.category,
+    })),
+  };
+
+  return <TournamentPublic tournament={normalized} />;
+}

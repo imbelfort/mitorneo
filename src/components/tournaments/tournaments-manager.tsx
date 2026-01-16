@@ -8,7 +8,7 @@ import TournamentScores from "@/components/tournaments/tournament-scores";
 import TournamentFinalStandings from "@/components/tournaments/tournament-final-standings";
 import TournamentPrizes from "@/components/tournaments/tournament-prizes";
 import TournamentRegistrations from "@/components/tournaments/tournament-registrations";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type League = {
   id: string;
@@ -40,11 +40,45 @@ type TournamentCategory = {
   siblingPrice: string | number;
 };
 
+const FONT_OPTIONS = [
+  { label: "Merriweather", value: "Merriweather" },
+  { label: "Cormorant Garamond", value: "Cormorant Garamond" },
+  { label: "Source Serif 4", value: "Source Serif 4" },
+  { label: "Playfair Display", value: "Playfair Display" },
+];
+
+const FONT_SIZES = [
+  { label: "12", value: "1" },
+  { label: "14", value: "2" },
+  { label: "16", value: "3" },
+  { label: "18", value: "4" },
+  { label: "20", value: "5" },
+  { label: "24", value: "6" },
+  { label: "28", value: "7" },
+];
+
+const isRulesEmpty = (value: string | null) => {
+  if (!value) return true;
+  const text = value
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .trim();
+  return text.length === 0;
+};
+
 type TournamentClub = {
   id: string;
   name: string;
   address: string | null;
   courtsCount?: number | null;
+};
+
+type TournamentSponsor = {
+  id?: string;
+  name?: string | null;
+  imageUrl: string;
+  linkUrl?: string | null;
+  sortOrder?: number;
 };
 
 type Tournament = {
@@ -63,6 +97,7 @@ type Tournament = {
   rulesText: string | null;
   playDays: string[] | null;
   clubs: TournamentClub[];
+  sponsors: TournamentSponsor[];
   categories: TournamentCategory[];
 };
 
@@ -70,6 +105,12 @@ type ClubForm = {
   name: string;
   address: string;
   courtsCount: string;
+};
+
+type SponsorForm = {
+  name: string;
+  imageUrl: string;
+  linkUrl: string;
 };
 
 type Props = {
@@ -81,6 +122,11 @@ type Props = {
 };
 
 const createEmptyClub = (): ClubForm => ({ name: "", address: "", courtsCount: "1" });
+const createEmptySponsor = (): SponsorForm => ({
+  name: "",
+  imageUrl: "",
+  linkUrl: "",
+});
 
 const toISODate = (value: string | Date | null | undefined) => {
   if (!value) return "";
@@ -151,6 +197,7 @@ export default function TournamentsManager({
     "WAITING" | "ACTIVE" | "FINISHED"
   >("WAITING");
   const [roundRobinComplete, setRoundRobinComplete] = useState(false);
+  const [stepNineUnlocked, setStepNineUnlocked] = useState(false);
   const [activePaymentRate, setActivePaymentRate] = useState("0");
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentRateInput, setPaymentRateInput] = useState("0");
@@ -174,6 +221,7 @@ export default function TournamentsManager({
     rulesText: "",
     playDays: [""],
     clubs: [createEmptyClub()],
+    sponsors: [] as SponsorForm[],
   });
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<string>>(new Set());
   const [categoryPrices, setCategoryPrices] = useState<Record<string, string>>({});
@@ -187,6 +235,32 @@ export default function TournamentsManager({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const rulesEditorRef = useRef<HTMLDivElement | null>(null);
+  const [rulesFocused, setRulesFocused] = useState(false);
+
+  const syncRulesFromEditor = () => {
+    const editor = rulesEditorRef.current;
+    if (!editor) return;
+    const html = editor.innerHTML;
+    const normalized = html === "<br>" ? "" : html;
+    setForm((prev) => ({ ...prev, rulesText: normalized }));
+  };
+
+  const applyRulesCommand = (command: string, value?: string) => {
+    if (typeof document === "undefined") return;
+    document.execCommand(command, false, value);
+    syncRulesFromEditor();
+  };
+
+  useEffect(() => {
+    if (rulesFocused) return;
+    const editor = rulesEditorRef.current;
+    if (!editor) return;
+    const next = form.rulesText ?? "";
+    if (editor.innerHTML !== next) {
+      editor.innerHTML = next;
+    }
+  }, [form.rulesText, rulesFocused]);
 
   const canSubmit = useMemo(() => {
     if (!form.name.trim()) return false;
@@ -207,11 +281,21 @@ export default function TournamentsManager({
     for (const categoryId of selectedCategoryIds) {
       const parsed = parsePriceInput(categoryPrices[categoryId]);
       if (parsed === null || parsed < 0) return false;
-      const parsedSecondary = parsePriceInput(categorySecondaryPrices[categoryId]);
-      if (parsedSecondary === null || parsedSecondary < 0) return false;
-      const parsedSibling = parsePriceInput(categorySiblingPrices[categoryId]);
-      if (parsedSibling === null || parsedSibling < 0) return false;
+      const secondaryRaw = categorySecondaryPrices[categoryId] ?? "";
+      if (secondaryRaw.trim().length > 0) {
+        const parsedSecondary = parsePriceInput(secondaryRaw);
+        if (parsedSecondary === null || parsedSecondary < 0) return false;
+      }
+      const siblingRaw = categorySiblingPrices[categoryId] ?? "";
+      if (siblingRaw.trim().length > 0) {
+        const parsedSibling = parsePriceInput(siblingRaw);
+        if (parsedSibling === null || parsedSibling < 0) return false;
+      }
     }
+    const invalidSponsor = form.sponsors.some(
+      (sponsor) => sponsor.imageUrl.trim().length === 0
+    );
+    if (invalidSponsor) return false;
     const validClubs = form.clubs.filter((club) => club.name.trim().length >= 2);
     if (validClubs.length === 0) return false;
     const hasInvalidCourts = validClubs.some(
@@ -241,6 +325,7 @@ export default function TournamentsManager({
       rulesText: "",
       playDays: [""],
       clubs: [createEmptyClub()],
+      sponsors: [],
     });
     setSelectedCategoryIds(new Set());
     setCategoryPrices({});
@@ -266,6 +351,7 @@ export default function TournamentsManager({
             ? String(tournament.paymentRate)
             : "0",
         status: tournament.status ?? "WAITING",
+        sponsors: Array.isArray(tournament.sponsors) ? tournament.sponsors : [],
       }));
       setTournaments(normalized);
       if (activeTournamentId) {
@@ -373,6 +459,32 @@ export default function TournamentsManager({
     setForm((prev) => {
       const clubs = prev.clubs.filter((_, idx) => idx !== index);
       return { ...prev, clubs: clubs.length ? clubs : [createEmptyClub()] };
+    });
+  };
+
+  const updateSponsorField = (
+    index: number,
+    field: keyof SponsorForm,
+    value: string
+  ) => {
+    setForm((prev) => {
+      const sponsors = [...prev.sponsors];
+      sponsors[index] = { ...sponsors[index], [field]: value };
+      return { ...prev, sponsors };
+    });
+  };
+
+  const addSponsor = () => {
+    setForm((prev) => {
+      if (prev.sponsors.length >= 13) return prev;
+      return { ...prev, sponsors: [...prev.sponsors, createEmptySponsor()] };
+    });
+  };
+
+  const removeSponsor = (index: number) => {
+    setForm((prev) => {
+      const sponsors = prev.sponsors.filter((_, idx) => idx !== index);
+      return { ...prev, sponsors };
     });
   };
 
@@ -505,6 +617,13 @@ export default function TournamentsManager({
                 : "1",
           }))
         : [createEmptyClub()],
+      sponsors: tournament.sponsors?.length
+        ? tournament.sponsors.map((sponsor) => ({
+            name: sponsor.name ?? "",
+            imageUrl: sponsor.imageUrl ?? "",
+            linkUrl: sponsor.linkUrl ?? "",
+          }))
+        : [],
     });
     setSelectedCategoryIds(new Set(validTournamentCategories.map((item) => item.categoryId)));
     setCategoryPrices(() => {
@@ -593,6 +712,13 @@ export default function TournamentsManager({
         address: club.address || null,
         courtsCount: parseCourtsCountInput(club.courtsCount) ?? 1,
       })),
+      sponsors: form.sponsors
+        .filter((sponsor) => sponsor.imageUrl.trim().length > 0)
+        .map((sponsor) => ({
+          name: sponsor.name || null,
+          imageUrl: sponsor.imageUrl.trim(),
+          linkUrl: sponsor.linkUrl || null,
+        })),
     };
 
     const endpoint = isEditing ? `/api/tournaments/${editingId}` : "/api/tournaments";
@@ -662,17 +788,12 @@ export default function TournamentsManager({
       selectedCategories.map((category) => ({
         ...category,
         price: categoryPrices[category.id] ?? "0.00",
-        secondaryPrice:
-          categorySecondaryPrices[category.id] ??
-          categoryPrices[category.id] ??
-          "0.00",
-        siblingPrice:
-          categorySiblingPrices[category.id] ??
-          categoryPrices[category.id] ??
-          "0.00",
+        secondaryPrice: categorySecondaryPrices[category.id] ?? "",
+        siblingPrice: categorySiblingPrices[category.id] ?? "",
       })),
     [selectedCategories, categoryPrices, categorySecondaryPrices, categorySiblingPrices]
   );
+  const rulesEmpty = isRulesEmpty(form.rulesText);
 
   const stepTwoEnabled = Boolean(activeTournamentId);
   const stepThreeEnabled = Boolean(activeTournamentId);
@@ -685,7 +806,7 @@ export default function TournamentsManager({
   const stepEightEnabled = Boolean(activeTournamentId) && canContinueAfterPayment;
   const stepNineEnabled =
     Boolean(activeTournamentId) &&
-    (activeTournamentStatus === "FINISHED" || roundRobinComplete);
+    (activeTournamentStatus === "FINISHED" || stepNineUnlocked);
 
   const updateTournamentStatus = async (
     status: "WAITING" | "ACTIVE" | "FINISHED"
@@ -707,6 +828,9 @@ export default function TournamentsManager({
     }
     const nextStatus = data?.tournament?.status ?? status;
     setActiveTournamentStatus(nextStatus);
+    if (nextStatus === "FINISHED") {
+      setStepNineUnlocked(true);
+    }
     await refreshTournaments();
     setMessage("Estado actualizado");
   };
@@ -753,6 +877,7 @@ export default function TournamentsManager({
 
   useEffect(() => {
     if (!activeTournamentId) return;
+    setStepNineUnlocked(false);
     syncActiveStatus();
   }, [activeTournamentId]);
 
@@ -1102,13 +1227,221 @@ export default function TournamentsManager({
             </div>
             <div className="space-y-2 md:col-span-2">
               <label className="text-sm font-medium text-slate-700">Reglas</label>
-              <textarea
-                value={form.rulesText}
-                onChange={(e) => setForm((prev) => ({ ...prev, rulesText: e.target.value }))}
-                className="min-h-[120px] w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                placeholder="Escribe las reglas del torneo..."
-              />
+              <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div className="flex flex-wrap items-center gap-2 border-b border-slate-200/70 bg-slate-50/80 px-3 py-2">
+                  <select
+                    defaultValue=""
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        applyRulesCommand("fontName", e.target.value);
+                        e.currentTarget.value = "";
+                      }
+                    }}
+                    className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700"
+                  >
+                    <option value="">Fuente</option>
+                    {FONT_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    defaultValue=""
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        applyRulesCommand("fontSize", e.target.value);
+                        e.currentTarget.value = "";
+                      }
+                    }}
+                    className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700"
+                  >
+                    <option value="">Tamano</option>
+                    {FONT_SIZES.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="color"
+                    aria-label="Color de texto"
+                    onChange={(e) => applyRulesCommand("foreColor", e.target.value)}
+                    className="h-8 w-8 cursor-pointer rounded-lg border border-slate-200 bg-white p-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => applyRulesCommand("bold")}
+                    className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:border-slate-300"
+                  >
+                    Negrita
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyRulesCommand("italic")}
+                    className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:border-slate-300"
+                  >
+                    Italica
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyRulesCommand("underline")}
+                    className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:border-slate-300"
+                  >
+                    Subrayar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyRulesCommand("insertUnorderedList")}
+                    className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:border-slate-300"
+                  >
+                    Lista
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyRulesCommand("insertOrderedList")}
+                    className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:border-slate-300"
+                  >
+                    Numerada
+                  </button>
+                  <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-1 py-1">
+                    <button
+                      type="button"
+                      onClick={() => applyRulesCommand("justifyLeft")}
+                      className="rounded-md px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                    >
+                      Izq
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyRulesCommand("justifyCenter")}
+                      className="rounded-md px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                    >
+                      Centro
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyRulesCommand("justifyRight")}
+                      className="rounded-md px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                    >
+                      Der
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => applyRulesCommand("removeFormat")}
+                    className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:border-slate-300"
+                  >
+                    Limpiar
+                  </button>
+                </div>
+                <div className="relative">
+                  {rulesEmpty && (
+                    <div className="pointer-events-none absolute left-3 top-3 text-sm text-slate-400">
+                      Escribe las reglas del torneo...
+                    </div>
+                  )}
+                  <div
+                    ref={rulesEditorRef}
+                    contentEditable
+                    onInput={syncRulesFromEditor}
+                    onFocus={() => setRulesFocused(true)}
+                    onBlur={() => {
+                      setRulesFocused(false);
+                      syncRulesFromEditor();
+                    }}
+                    className="min-h-[180px] px-3 py-3 text-sm text-slate-900 focus:outline-none"
+                    style={{ fontFamily: "Merriweather, 'Times New Roman', serif" }}
+                    suppressContentEditableWarning
+                  />
+                </div>
+              </div>
             </div>
+          </div>
+
+          <div className="mt-6 rounded-2xl border border-slate-200/70 bg-white/90 p-5 shadow-[0_12px_32px_-24px_rgba(15,23,42,0.25)]">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Auspiciadores</h3>
+                <p className="text-sm text-slate-600">
+                  Agrega hasta 13 logos con link para la pagina publica del torneo.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={addSponsor}
+                className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-700 shadow-sm transition hover:border-slate-300"
+              >
+                + Agregar auspiciador
+              </button>
+            </div>
+
+            {form.sponsors.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-500">
+                Sin auspiciadores registrados.
+              </p>
+            ) : (
+              <div className="mt-4 space-y-3">
+                {form.sponsors.map((sponsor, index) => (
+                  <div
+                    key={`sponsor-${index}`}
+                    className="grid gap-3 rounded-2xl border border-slate-200/70 bg-slate-50/80 p-4 md:grid-cols-[1.2fr_1.6fr_1.6fr_auto]"
+                  >
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase text-slate-500">
+                        Nombre
+                      </label>
+                      <input
+                        type="text"
+                        value={sponsor.name}
+                        onChange={(e) =>
+                          updateSponsorField(index, "name", e.target.value)
+                        }
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                        placeholder="Sponsor"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase text-slate-500">
+                        Imagen (URL)
+                      </label>
+                      <input
+                        type="url"
+                        value={sponsor.imageUrl}
+                        onChange={(e) =>
+                          updateSponsorField(index, "imageUrl", e.target.value)
+                        }
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                        placeholder="https://..."
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase text-slate-500">
+                        Link (opcional)
+                      </label>
+                      <input
+                        type="url"
+                        value={sponsor.linkUrl}
+                        onChange={(e) =>
+                          updateSponsorField(index, "linkUrl", e.target.value)
+                        }
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                        placeholder="https://..."
+                      />
+                    </div>
+                    <div className="flex items-start justify-end">
+                      <button
+                        type="button"
+                        onClick={() => removeSponsor(index)}
+                        className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-red-600 transition hover:border-red-300"
+                      >
+                        Quitar
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="rounded-2xl border border-slate-200/70 bg-slate-50/80 p-5 shadow-[0_12px_32px_-24px_rgba(15,23,42,0.25)]">
@@ -1332,10 +1665,10 @@ export default function TournamentsManager({
                         Precio 1
                       </th>
                       <th className="px-3 py-3 text-left font-semibold">
-                        Precio 2+
+                        Precio 2+ (opcional)
                       </th>
                       <th className="px-3 py-3 text-left font-semibold">
-                        Precio hermano
+                        Precio hermano (opcional)
                       </th>
                     </tr>
                   </thead>
@@ -1527,6 +1860,14 @@ export default function TournamentsManager({
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
+                    <a
+                      href={`/tournaments/${tournament.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-full border border-indigo-200 bg-indigo-50/70 px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50"
+                    >
+                      Ver publico
+                    </a>
                     <button
                       type="button"
                       onClick={() => startEditing(tournament)}
@@ -1638,6 +1979,10 @@ export default function TournamentsManager({
             onCompletionChange={(complete) => {
               setRoundRobinComplete(complete);
             }}
+            onUnlockStepNine={() => {
+              setStepNineUnlocked(true);
+              setCurrentStep(9);
+            }}
           />
         ) : (
           <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
@@ -1649,6 +1994,13 @@ export default function TournamentsManager({
           <TournamentPlayoffs
             tournamentId={activeTournamentId}
             tournamentName={activeTournamentName || form.name}
+            onStatusChange={(status) => {
+              setActiveTournamentStatus(status);
+              if (status === "FINISHED") {
+                setStepNineUnlocked(true);
+              }
+              refreshTournaments();
+            }}
           />
         ) : (
           <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
@@ -1657,7 +2009,7 @@ export default function TournamentsManager({
         )
       ) : currentStep === 9 ? (
         activeTournamentId &&
-        (activeTournamentStatus === "FINISHED" || roundRobinComplete) ? (
+        (activeTournamentStatus === "FINISHED" || stepNineUnlocked) ? (
           <TournamentFinalStandings
             tournamentId={activeTournamentId}
             tournamentName={activeTournamentName || form.name}

@@ -43,12 +43,32 @@ export async function POST(request: Request) {
   }
 
   try {
+    let owner = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { id: true },
+    });
+    if (!owner && session.user.email) {
+      owner = await prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: { id: true },
+      });
+    }
+    if (!owner) {
+      return NextResponse.json(
+        {
+          error:
+            "Usuario no encontrado. Vuelve a iniciar sesion o registra la cuenta.",
+        },
+        { status: 400 }
+      );
+    }
+
     const league = await prisma.league.create({
       data: {
         name: name.trim(),
         description: description ? description.trim() : null,
         photoUrl: photoUrl ? photoUrl.trim() : null,
-        ownerId: session.user.id,
+        ownerId: owner.id,
       },
     });
     return NextResponse.json({ league }, { status: 201 });

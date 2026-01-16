@@ -21,9 +21,24 @@ type Player = {
   photoUrl: string | null;
 };
 
+type PlayerStats = {
+  matchesPlayed: number;
+  matchesWon: number;
+  matchesLost: number;
+};
+
 type LeagueRanking = {
   leagueId: string;
   leagueName: string;
+  seasonId: string;
+  seasonName: string;
+  seasonStart: string;
+  seasonEnd: string;
+  categoryId: string;
+  categoryName: string;
+  categoryAbbreviation: string;
+  sportId: string | null;
+  sportName: string | null;
   points: number;
   position: number | null;
   totalPlayers: number;
@@ -74,6 +89,11 @@ export default function PlayerProfilePage() {
 
   const [state, setState] = useState<ViewState>("loading");
   const [player, setPlayer] = useState<Player | null>(null);
+  const [stats, setStats] = useState<PlayerStats>({
+    matchesPlayed: 0,
+    matchesWon: 0,
+    matchesLost: 0,
+  });
   const [error, setError] = useState<string | null>(null);
   const [rankings, setRankings] = useState<LeagueRanking[]>([]);
   const [rankingLoading, setRankingLoading] = useState(false);
@@ -104,6 +124,15 @@ export default function PlayerProfilePage() {
       }
 
       setPlayer(data?.player ?? null);
+      if (data?.stats) {
+        setStats({
+          matchesPlayed: Number(data.stats.matchesPlayed ?? 0),
+          matchesWon: Number(data.stats.matchesWon ?? 0),
+          matchesLost: Number(data.stats.matchesLost ?? 0),
+        });
+      } else {
+        setStats({ matchesPlayed: 0, matchesWon: 0, matchesLost: 0 });
+      }
       setState("ready");
     };
 
@@ -242,6 +271,30 @@ export default function PlayerProfilePage() {
                 {[player.city, player.country].filter(Boolean).join(", ") || "Sin dato"}
               </p>
             </div>
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+              <p className="text-xs font-semibold uppercase text-slate-500">
+                Partidos jugados
+              </p>
+              <p className="mt-2 text-base font-semibold text-slate-900">
+                {stats.matchesPlayed}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+              <p className="text-xs font-semibold uppercase text-slate-500">
+                Partidos ganados
+              </p>
+              <p className="mt-2 text-base font-semibold text-slate-900">
+                {stats.matchesWon}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+              <p className="text-xs font-semibold uppercase text-slate-500">
+                Partidos perdidos
+              </p>
+              <p className="mt-2 text-base font-semibold text-slate-900">
+                {stats.matchesLost}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -249,10 +302,10 @@ export default function PlayerProfilePage() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                Ranking por liga
+                Ranking por categoria
               </p>
               <p className="mt-1 text-sm text-slate-600">
-                Se calcula con torneos finalizados en cada liga.
+                Se calcula por liga, temporada y categoria.
               </p>
             </div>
           </div>
@@ -265,14 +318,26 @@ export default function PlayerProfilePage() {
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {rankings.map((entry) => (
                 <div
-                  key={entry.leagueId}
+                  key={`${entry.leagueId}-${entry.seasonId}-${entry.categoryId}`}
                   className="rounded-2xl border border-slate-200/70 bg-white px-4 py-3 shadow-sm"
                 >
                   <p className="text-sm font-semibold text-slate-900">
                     {entry.leagueName}
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
-                    Puesto:{" "}
+                    Temporada:{" "}
+                    <span className="font-semibold text-slate-800">
+                      {entry.seasonName}
+                    </span>
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Categoria:{" "}
+                    <span className="font-semibold text-slate-800">
+                      {entry.categoryName} ({entry.categoryAbbreviation})
+                    </span>
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Ranking:{" "}
                     <span className="font-semibold text-slate-800">
                       {entry.position ?? "-"}
                     </span>{" "}
@@ -282,6 +347,12 @@ export default function PlayerProfilePage() {
                     Puntos:{" "}
                     <span className="font-semibold text-slate-800">
                       {entry.points}
+                    </span>
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Deporte:{" "}
+                    <span className="font-semibold text-slate-800">
+                      {entry.sportName ?? "-"}
                     </span>
                   </p>
                 </div>

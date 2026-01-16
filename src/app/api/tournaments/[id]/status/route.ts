@@ -1,6 +1,10 @@
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
+import {
+  computePlayerPointsByCategory,
+  type TournamentRankingData,
+} from "@/lib/ranking";
 import { NextResponse } from "next/server";
 
 type StatusInput = "WAITING" | "ACTIVE" | "FINISHED";
@@ -52,7 +56,15 @@ export async function PATCH(
 
   const tournament = await prisma.tournament.findUnique({
     where: { id: tournamentId },
-    select: { id: true, ownerId: true, status: true },
+    select: {
+      id: true,
+      ownerId: true,
+      status: true,
+      leagueId: true,
+      rankingEnabled: true,
+      startDate: true,
+      createdAt: true,
+    },
   });
 
   if (!tournament) {
@@ -78,51 +90,160 @@ export async function PATCH(
         { status: 400 }
       );
     }
-    const categories = await prisma.tournamentCategory.findMany({
-      where: { tournamentId },
-      select: { drawType: true },
+    // Permite finalizar aunque falten partidos, segun la solicitud del administrador.
+  }
+
+  const shouldApplyRanking =
+    status === "FINISHED" && tournament.status !== "FINISHED";
+
+  if (shouldApplyRanking && tournament.rankingEnabled && tournament.leagueId) {
+    const tournamentDate = tournament.startDate ?? tournament.createdAt;
+    const season = await prisma.season.findFirst({
+      where: {
+        leagueId: tournament.leagueId,
+        startDate: { lte: tournamentDate },
+        endDate: { gte: tournamentDate },
+      },
+      select: { id: true },
     });
-    const hasNonRoundRobin = categories.some(
-      (category) => category.drawType !== "ROUND_ROBIN"
-    );
-    if (categories.length === 0 || hasNonRoundRobin) {
+
+    if (!season) {
       return NextResponse.json(
-        { error: "Solo torneos de grupos pueden finalizarse aqui" },
+        {
+          error:
+            "No hay una temporada activa para este torneo. Crea una nueva temporada.",
+        },
         { status: 400 }
       );
     }
-    const groupMatches = await prisma.tournamentMatch.findMany({
-      where: { tournamentId, stage: "GROUP" },
+
+    const tournamentData = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
       select: {
-        id: true,
-        games: true,
-        winnerSide: true,
-        outcomeType: true,
-        outcomeSide: true,
+        categories: { select: { categoryId: true, drawType: true } },
+        registrations: {
+          select: {
+            id: true,
+            categoryId: true,
+            groupName: true,
+            seed: true,
+            rankingNumber: true,
+            createdAt: true,
+            playerId: true,
+            partnerId: true,
+            partnerTwoId: true,
+          },
+        },
+        matches: {
+          select: {
+            categoryId: true,
+            groupName: true,
+            stage: true,
+            roundNumber: true,
+            games: true,
+            teamAId: true,
+            teamBId: true,
+            winnerSide: true,
+            outcomeType: true,
+            outcomeSide: true,
+            isBronzeMatch: true,
+          },
+        },
+        groupPoints: {
+          select: {
+            winPoints: true,
+            winWithoutGameLossPoints: true,
+            lossPoints: true,
+            lossWithGameWinPoints: true,
+            tiebreakerOrder: true,
+          },
+        },
+        rankingPoints: {
+          select: { placeFrom: true, placeTo: true, points: true },
+        },
       },
     });
-    if (groupMatches.length === 0) {
-      return NextResponse.json(
-        { error: "Primero registra los partidos de grupos" },
-        { status: 400 }
-      );
-    }
-    const isComplete = (match: {
-      games: unknown;
-      winnerSide: string | null;
-      outcomeType: string | null;
-      outcomeSide: string | null;
-    }) => {
-      if (match.outcomeType && match.outcomeType !== "PLAYED") {
-        return Boolean(match.outcomeSide || match.winnerSide);
+
+    if (tournamentData) {
+      const data: TournamentRankingData = {
+        categories: tournamentData.categories.map((entry) => ({
+          categoryId: entry.categoryId,
+          drawType: entry.drawType as TournamentRankingData["categories"][number]["drawType"],
+        })),
+        registrations: tournamentData.registrations.map((registration) => ({
+          id: registration.id,
+          categoryId: registration.categoryId,
+          groupName: registration.groupName,
+          seed: registration.seed,
+          rankingNumber: registration.rankingNumber,
+          createdAt: registration.createdAt,
+          playerId: registration.playerId,
+          partnerId: registration.partnerId,
+          partnerTwoId: registration.partnerTwoId,
+        })),
+        matches: tournamentData.matches.map((match) => ({
+          categoryId: match.categoryId,
+          groupName: match.groupName,
+          stage: match.stage as TournamentRankingData["matches"][number]["stage"],
+          roundNumber: match.roundNumber,
+          games: match.games,
+          teamAId: match.teamAId,
+          teamBId: match.teamBId,
+          winnerSide: match.winnerSide as TournamentRankingData["matches"][number]["winnerSide"],
+          outcomeType: match.outcomeType as TournamentRankingData["matches"][number]["outcomeType"],
+          outcomeSide: match.outcomeSide as TournamentRankingData["matches"][number]["outcomeSide"],
+          isBronzeMatch: match.isBronzeMatch,
+        })),
+        groupPoints: tournamentData.groupPoints
+          ? {
+              winPoints: tournamentData.groupPoints.winPoints,
+              winWithoutGameLossPoints:
+                tournamentData.groupPoints.winWithoutGameLossPoints,
+              lossPoints: tournamentData.groupPoints.lossPoints,
+              lossWithGameWinPoints:
+                tournamentData.groupPoints.lossWithGameWinPoints,
+              tiebreakerOrder: tournamentData.groupPoints.tiebreakerOrder,
+            }
+          : null,
+        rankingPoints: tournamentData.rankingPoints,
+      };
+
+      if (!(prisma as typeof prisma & { playerRanking?: unknown }).playerRanking) {
+        return NextResponse.json(
+          { error: "Prisma client desactualizado. Ejecuta prisma generate." },
+          { status: 500 }
+        );
       }
-      return Array.isArray(match.games) && match.games.length > 0;
-    };
-    if (!groupMatches.every(isComplete)) {
-      return NextResponse.json(
-        { error: "Aun faltan partidos por completar" },
-        { status: 400 }
-      );
+
+      const { pointsByPlayerCategory } = computePlayerPointsByCategory(data);
+      const updates: ReturnType<typeof prisma.playerRanking.upsert>[] = [];
+      pointsByPlayerCategory.forEach((categoryMap, playerId) => {
+        categoryMap.forEach((points, categoryId) => {
+          updates.push(
+            prisma.playerRanking.upsert({
+              where: {
+                playerId_leagueId_seasonId_categoryId: {
+                  playerId,
+                  leagueId: tournament.leagueId as string,
+                  seasonId: season.id,
+                  categoryId,
+                },
+              },
+              update: { points: { increment: points } },
+              create: {
+                playerId,
+                leagueId: tournament.leagueId as string,
+                seasonId: season.id,
+                categoryId,
+                points,
+              },
+            })
+          );
+        });
+      });
+      if (updates.length > 0) {
+        await prisma.$transaction(updates);
+      }
     }
   }
 

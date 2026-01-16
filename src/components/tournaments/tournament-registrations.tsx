@@ -619,7 +619,7 @@ export default function TournamentRegistrations({
       return;
     }
     await refreshRegistrations();
-    setMessage("Ranking actualizado segun la liga.");
+    setMessage("Ranking actualizado segun la liga y categoria.");
   };
 
   const handleDelete = async (registrationId: string) => {
@@ -1284,9 +1284,9 @@ export default function TournamentRegistrations({
 
         {rankingEnabled && leagueId && (
           <div className="mt-4 rounded-2xl border border-slate-200/70 bg-white/90 p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-              Rankear por liga
-            </p>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                Rankear por liga y categoria
+              </p>
             <p className="mt-1 text-sm text-slate-600">
               Liga:{" "}
               <span className="font-semibold text-slate-800">
@@ -1317,7 +1317,7 @@ export default function TournamentRegistrations({
                 disabled={rankingLoading || !selectedSeasonId}
                 className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {rankingLoading ? "Rankeando..." : "Rankear por liga"}
+                  {rankingLoading ? "Rankeando..." : "Rankear por liga"}
               </button>
             </div>
             {rankingError && (

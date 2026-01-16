@@ -272,6 +272,24 @@ const computeMatchResult = (games: { a: number; b: number }[]) => {
   } as const;
 };
 
+const formatMatchScore = (match?: Match | null) => {
+  if (!match) return null;
+  const outcomeType = match.outcomeType ?? "PLAYED";
+  if (outcomeType !== "PLAYED") {
+    return outcomeType === "WALKOVER"
+      ? "WO"
+      : outcomeType === "INJURY"
+      ? "Lesion"
+      : "Resultado";
+  }
+  const games = parseGames(match.games);
+  if (games.length === 0) return null;
+  const result = computeMatchResult(games);
+  const gamesText = games.map((game) => `${game.a}-${game.b}`).join(", ");
+  if (!result) return gamesText;
+  return `${result.setsA}-${result.setsB} (${gamesText})`;
+};
+
 const compareStandings = (
   a: {
     points: number;
@@ -1510,6 +1528,7 @@ const renderTeamDisplay = (
                             );
                         const hasScore =
                           Array.isArray(match.games) && match.games.length > 0;
+                        const scoreText = formatMatchScore(match);
                         return (
                           <tr key={match.id} className="bg-white">
                             <td className="px-3 py-2 text-slate-700">
@@ -1546,14 +1565,19 @@ const renderTeamDisplay = (
                               {teamBDisplay}
                             </td>
                             <td className="px-3 py-2">
-                              <button
-                                type="button"
-                                onClick={() => openScoreModal(match)}
-                                disabled={scoreSaving && scoreMatchId === match.id}
-                                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
-                              >
-                                {hasScore ? "Editar" : "Marcador"}
-                              </button>
+                              <div className="flex flex-col gap-2">
+                                <span className="text-xs text-slate-700">
+                                  {scoreText ?? "-"}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => openScoreModal(match)}
+                                  disabled={scoreSaving && scoreMatchId === match.id}
+                                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+                                >
+                                  {hasScore ? "Editar" : "Marcador"}
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -1728,6 +1752,7 @@ const renderTeamDisplay = (
                                 match &&
                                 Array.isArray(match.games) &&
                                 match.games.length > 0;
+                              const scoreText = match ? formatMatchScore(match) : null;
                               return (
                                 <tr
                                   key={slot.key}
@@ -1818,16 +1843,21 @@ const renderTeamDisplay = (
                                   </td>
                                   <td className="px-3 py-2 print-hidden">
                                     {match ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => openScoreModal(match)}
-                                        disabled={
-                                          scoreSaving && scoreMatchId === match.id
-                                        }
-                                        className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
-                                      >
-                                        {hasScore ? "Editar" : "Marcador"}
-                                      </button>
+                                      <div className="flex flex-col gap-2">
+                                        <span className="text-xs text-slate-700">
+                                          {scoreText ?? "-"}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => openScoreModal(match)}
+                                          disabled={
+                                            scoreSaving && scoreMatchId === match.id
+                                          }
+                                          className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+                                        >
+                                          {hasScore ? "Editar" : "Marcador"}
+                                        </button>
+                                      </div>
                                     ) : (
                                       <span className="text-slate-400">-</span>
                                     )}

@@ -47,7 +47,7 @@ export async function PUT(
 
   const tournament = await prisma.tournament.findUnique({
     where: { id: tournamentId },
-    select: { id: true, ownerId: true },
+    select: { id: true, ownerId: true, status: true },
   });
 
   if (!tournament) {
@@ -56,6 +56,12 @@ export async function PUT(
 
   if (session.user.role !== "ADMIN" && tournament.ownerId !== session.user.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  }
+  if (tournament.status === "FINISHED") {
+    return NextResponse.json(
+      { error: "El torneo ya esta finalizado" },
+      { status: 400 }
+    );
   }
 
   const body = (await request.json().catch(() => ({}))) as QualifiersInput;

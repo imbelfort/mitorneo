@@ -76,6 +76,7 @@ type Props = {
   tournamentName: string;
   onStatusChange?: (status: "WAITING" | "ACTIVE" | "FINISHED") => void;
   onCompletionChange?: (complete: boolean) => void;
+  onUnlockStepNine?: () => void;
 };
 
 type StandingEntry = {
@@ -96,6 +97,7 @@ type StandingEntry = {
 };
 
 const groupDrawTypes = new Set<DrawType>(["ROUND_ROBIN", "GROUPS_PLAYOFF"]);
+const playoffDrawTypes = new Set<DrawType>(["PLAYOFF", "GROUPS_PLAYOFF"]);
 const DEFAULT_TIEBREAKERS: Tiebreaker[] = [
   "SETS_DIFF",
   "MATCHES_WON",
@@ -247,6 +249,7 @@ export default function TournamentScores({
   tournamentName,
   onStatusChange,
   onCompletionChange,
+  onUnlockStepNine,
 }: Props) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [registrations, setRegistrations] = useState<Registration[]>([]);
@@ -266,7 +269,6 @@ export default function TournamentScores({
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [finishing, setFinishing] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -353,6 +355,11 @@ export default function TournamentScores({
     [categories]
   );
 
+  const hasPlayoffCategories = useMemo(
+    () => categories.some((c) => playoffDrawTypes.has(c.drawType ?? "ROUND_ROBIN")),
+    [categories]
+  );
+
   const groupCompleteByCategory = useMemo(() => {
     const map = new Map<string, boolean>();
     const matchesByCategory = new Map<string, Match[]>();
@@ -385,35 +392,19 @@ export default function TournamentScores({
     [groupCategories, groupCompleteByCategory]
   );
 
+  const allMatchesComplete = useMemo(() => {
+    const relevantMatches = matches.filter((match) => {
+      if (match.stage === "GROUP") return true;
+      return Boolean(match.teamAId && match.teamBId);
+    });
+    return relevantMatches.length > 0 && relevantMatches.every(isMatchComplete);
+  }, [matches]);
+
   useEffect(() => {
     if (!onCompletionChange) return;
     onCompletionChange(allRoundRobin && allGroupMatchesComplete);
   }, [allRoundRobin, allGroupMatchesComplete, onCompletionChange]);
 
-  const handleFinishTournament = async () => {
-    if (finishing) return;
-    setError(null);
-    setFinishing(true);
-    try {
-      const res = await fetch(`/api/tournaments/${tournamentId}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ status: "FINISHED" }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const detail = data?.detail ? ` (${data.detail})` : "";
-        throw new Error(`${data?.error ?? "No se pudo finalizar"}${detail}`);
-      }
-      setTournamentStatus("FINISHED");
-      onStatusChange?.("FINISHED");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo finalizar");
-    } finally {
-      setFinishing(false);
-    }
-  };
 
   const standingsByCategory = useMemo(() => {
     const result = new Map<string, Map<string, StandingEntry[]>>();
@@ -601,21 +592,20 @@ export default function TournamentScores({
         <p className="mt-3 text-sm text-slate-600">
           Posiciones por grupo con sets y puntos acumulados.
         </p>
-        {allRoundRobin &&
-          allGroupMatchesComplete &&
-          tournamentStatus === "ACTIVE" &&
-          (sessionRole === "ADMIN" || sessionRole === "TOURNAMENT_ADMIN") && (
+        {tournamentStatus === "ACTIVE" &&
+          (sessionRole === "ADMIN" || sessionRole === "TOURNAMENT_ADMIN") &&
+          allMatchesComplete &&
+          onUnlockStepNine && (
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={handleFinishTournament}
-              disabled={finishing}
-              className="rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
+              onClick={onUnlockStepNine}
+              className="rounded-full bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-700"
             >
-              {finishing ? "Finalizando..." : "Terminar torneo"}
+              Habilitar paso 9
             </button>
             <span className="text-xs text-slate-500">
-              Disponible cuando todos los partidos de grupos estan completados.
+              Disponible cuando todos los partidos estan completados.
             </span>
           </div>
         )}

@@ -173,6 +173,7 @@ model Tournament {
   groupPoints     TournamentGroupPoints?
   groupQualifiers TournamentGroupQualifier[]
   scheduleDays    TournamentScheduleDay[]
+  sponsors        TournamentSponsor[]
 }
 
 model GlobalSetting {
@@ -196,6 +197,22 @@ model TournamentClub {
   matches    TournamentMatch[]
 }
 
+model TournamentSponsor {
+  id           String   @id @default(cuid())
+  tournamentId String
+  name         String?
+  imageUrl     String   @db.MediumText
+  linkUrl      String?  @db.MediumText
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  @@index([tournamentId])
+  @@index([sortOrder])
+}
+
 model Category {
   id           String            @id @default(cuid())
   name         String
@@ -212,6 +229,7 @@ model Category {
   matches         TournamentMatch[]
   prizes          TournamentPrize[]
   groupQualifiers TournamentGroupQualifier[]
+  rankings        PlayerRanking[]
 
   @@unique([sportId, name])
   @@unique([sportId, abbreviation])
@@ -401,8 +419,31 @@ model Player {
   registrations           TournamentRegistration[] @relation("RegistrationPlayer")
   partnerRegistrations    TournamentRegistration[] @relation("RegistrationPartner")
   partnerTwoRegistrations TournamentRegistration[] @relation("RegistrationPartnerTwo")
+  rankings                PlayerRanking[]
 
   @@unique([documentType, documentNumber])
+}
+
+model PlayerRanking {
+  id        String   @id @default(cuid())
+  playerId  String
+  leagueId  String
+  seasonId  String
+  categoryId String
+  points    Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  season Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, leagueId, seasonId, categoryId])
+  @@index([playerId])
+  @@index([leagueId])
+  @@index([seasonId])
+  @@index([categoryId])
 }
 
 model League {
@@ -415,6 +456,7 @@ model League {
   updatedAt   DateTime     @updatedAt
   seasons     Season[]
   tournaments Tournament[]
+  rankings    PlayerRanking[]
 
   owner User? @relation("LeagueOwner", fields: [ownerId], references: [id])
 }
@@ -429,6 +471,7 @@ model Season {
   updatedAt DateTime @updatedAt
 
   league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  rankings PlayerRanking[]
 
   @@unique([leagueId, name])
 }

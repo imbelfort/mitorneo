@@ -16,6 +16,12 @@ type CategoryEntryInput = {
   siblingPrice?: unknown;
 };
 
+type SponsorEntryInput = {
+  name?: unknown;
+  imageUrl?: unknown;
+  linkUrl?: unknown;
+};
+
 const parseDateOnly = (value: unknown) => {
   if (!value || typeof value !== "string") return null;
   const trimmed = value.trim();
@@ -186,6 +192,38 @@ const normalizeCategoryEntries = (value: unknown) => {
   };
 };
 
+const normalizeSponsorEntries = (value: unknown) => {
+  const list = Array.isArray(value) ? (value as SponsorEntryInput[]) : [];
+  const sponsors: {
+    name: string | null;
+    imageUrl: string;
+    linkUrl: string | null;
+    sortOrder: number;
+  }[] = [];
+
+  for (let index = 0; index < list.length; index += 1) {
+    const entry = list[index];
+    if (!entry || typeof entry !== "object") {
+      return { error: "Auspiciadores invalidos" };
+    }
+    const imageUrl =
+      typeof entry.imageUrl === "string" ? entry.imageUrl.trim() : "";
+    if (!imageUrl) {
+      return { error: "Imagen de auspiciador requerida" };
+    }
+    const name = typeof entry.name === "string" ? entry.name.trim() : "";
+    const linkUrl = typeof entry.linkUrl === "string" ? entry.linkUrl.trim() : "";
+    sponsors.push({
+      name: name || null,
+      imageUrl,
+      linkUrl: linkUrl || null,
+      sortOrder: index,
+    });
+  }
+
+  return { sponsors };
+};
+
 const resolveId = (request: Request, params?: { id?: string }) => {
   if (params?.id) return params.id;
   const url = new URL(request.url);
@@ -196,6 +234,9 @@ const resolveId = (request: Request, params?: { id?: string }) => {
 const tournamentInclude = {
   league: { select: { id: true, name: true } },
   clubs: true,
+  sponsors: {
+    orderBy: { sortOrder: "asc" },
+  },
   categories: {
     include: {
       category: {
@@ -229,7 +270,7 @@ export async function PATCH(
 
   const tournament = await prisma.tournament.findUnique({
     where: { id: tournamentId },
-    select: { id: true, ownerId: true },
+    select: { id: true, ownerId: true, status: true },
   });
 
   if (!tournament) {
@@ -238,6 +279,12 @@ export async function PATCH(
 
   if (session.user.role !== "ADMIN" && tournament.ownerId !== session.user.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  }
+  if (tournament.status === "FINISHED") {
+    return NextResponse.json(
+      { error: "El torneo ya esta finalizado" },
+      { status: 400 }
+    );
   }
 
   const body = await request.json().catch(() => ({}));
@@ -254,6 +301,7 @@ export async function PATCH(
     rulesText,
     playDays,
     categoryEntries,
+    sponsors,
   } = body as {
     name?: unknown;
     sportId?: unknown;
@@ -267,6 +315,7 @@ export async function PATCH(
     rulesText?: unknown;
     playDays?: unknown;
     categoryEntries?: unknown;
+    sponsors?: unknown;
   };
 
   if (!name || typeof name !== "string" || name.trim().length < 2) {
@@ -394,6 +443,12 @@ export async function PATCH(
     );
   }
 
+  const sponsorsResult = normalizeSponsorEntries(sponsors);
+  if (sponsorsResult.error) {
+    return NextResponse.json({ error: sponsorsResult.error }, { status: 400 });
+  }
+  const normalizedSponsors = sponsorsResult.sponsors ?? [];
+
   let leagueIdValue: string | null = null;
 
   if (rankingEnabledValue) {
@@ -456,6 +511,10 @@ export async function PATCH(
             secondaryPrice: entry.secondaryPrice,
             siblingPrice: entry.siblingPrice,
           })),
+        },
+        sponsors: {
+          deleteMany: {},
+          create: normalizedSponsors,
         },
       },
       include: tournamentInclude,
@@ -541,7 +600,7 @@ export async function DELETE(
 
   const tournament = await prisma.tournament.findUnique({
     where: { id: tournamentId },
-    select: { id: true, ownerId: true },
+    select: { id: true, ownerId: true, status: true },
   });
 
   if (!tournament) {
@@ -550,6 +609,12 @@ export async function DELETE(
 
   if (session.user.role !== "ADMIN" && tournament.ownerId !== session.user.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  }
+  if (tournament.status === "FINISHED") {
+    return NextResponse.json(
+      { error: "El torneo ya esta finalizado" },
+      { status: 400 }
+    );
   }
 
   await prisma.tournament.delete({ where: { id: tournament.id } });

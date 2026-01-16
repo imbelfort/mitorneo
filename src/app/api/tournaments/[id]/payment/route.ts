@@ -52,6 +52,22 @@ export async function PATCH(
     return NextResponse.json({ error: "Monto invalido" }, { status: 400 });
   }
 
+  const existing = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+    select: { id: true, status: true },
+  });
+
+  if (!existing) {
+    return NextResponse.json({ error: "Torneo no encontrado" }, { status: 404 });
+  }
+
+  if (existing.status === "FINISHED") {
+    return NextResponse.json(
+      { error: "El torneo ya esta finalizado" },
+      { status: 400 }
+    );
+  }
+
   const tournament = await prisma.tournament.update({
     where: { id: tournamentId },
     data: { paymentRate: rate },

@@ -69,6 +69,8 @@ type FixtureResponse = {
   registrations: Registration[];
   matches: Match[];
   groupQualifiers?: GroupQualifier[];
+  tournamentStatus?: "WAITING" | "ACTIVE" | "FINISHED";
+  sessionRole?: "ADMIN" | "TOURNAMENT_ADMIN";
   groupPoints?: {
     winPoints?: number;
     winWithoutGameLossPoints?: number;
@@ -81,6 +83,7 @@ type FixtureResponse = {
 type Props = {
   tournamentId: string;
   tournamentName: string;
+  onStatusChange?: (status: "WAITING" | "ACTIVE" | "FINISHED") => void;
 };
 
 type StandingEntry = {
@@ -673,7 +676,11 @@ const nextPowerOfTwo = (value: number) => {
   return size;
 };
 
-export default function TournamentPlayoffs({ tournamentId, tournamentName }: Props) {
+export default function TournamentPlayoffs({
+  tournamentId,
+  tournamentName,
+  onStatusChange,
+}: Props) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
@@ -690,6 +697,13 @@ export default function TournamentPlayoffs({ tournamentId, tournamentName }: Pro
   const [swapping, setSwapping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [finishing, setFinishing] = useState(false);
+  const [tournamentStatus, setTournamentStatus] = useState<
+    "WAITING" | "ACTIVE" | "FINISHED"
+  >("WAITING");
+  const [sessionRole, setSessionRole] = useState<"ADMIN" | "TOURNAMENT_ADMIN">(
+    "TOURNAMENT_ADMIN"
+  );
   const loadData = async () => {
     setLoading(true);
     setError(null);
@@ -714,6 +728,12 @@ export default function TournamentPlayoffs({ tournamentId, tournamentName }: Pro
     setGroupQualifiers(
       Array.isArray(data.groupQualifiers) ? data.groupQualifiers : []
     );
+    if (data.tournamentStatus) {
+      setTournamentStatus(data.tournamentStatus);
+    }
+    if (data.sessionRole) {
+      setSessionRole(data.sessionRole);
+    }
     if (data.groupPoints) {
       setGroupPoints({
         winPoints:
@@ -1074,6 +1094,47 @@ export default function TournamentPlayoffs({ tournamentId, tournamentName }: Pro
     return <p className="text-sm text-slate-500">Cargando llaves...</p>;
   }
 
+  const isMatchComplete = (match: Match) => {
+    const outcomeType = match.outcomeType ?? "PLAYED";
+    if (match.stage !== "GROUP" && (!match.teamAId || !match.teamBId)) {
+      return false;
+    }
+    if (outcomeType !== "PLAYED") {
+      return Boolean(match.outcomeSide || match.winnerSide);
+    }
+    if (match.winnerSide) return true;
+    return Array.isArray(match.games) && match.games.length > 0;
+  };
+
+  const allMatchesComplete =
+    matches.length > 0 && matches.every((match) => isMatchComplete(match));
+
+  const handleFinishTournament = async () => {
+    if (finishing) return;
+    setError(null);
+    setFinishing(true);
+    try {
+      const res = await fetch(`/api/tournaments/${tournamentId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ status: "FINISHED" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const detail = data?.detail ? ` (${data.detail})` : "";
+        throw new Error(`${data?.error ?? "No se pudo finalizar"}${detail}`);
+      }
+      setTournamentStatus("FINISHED");
+      onStatusChange?.("FINISHED");
+      setMessage("Torneo finalizado.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo finalizar");
+    } finally {
+      setFinishing(false);
+    }
+  };
+
   const hasExistingPlayoffs =
     Array.from(playoffMatchesByCategory.values()).flat().length > 0;
 
@@ -1093,22 +1154,36 @@ export default function TournamentPlayoffs({ tournamentId, tournamentName }: Pro
               Torneo: <span className="font-semibold">{tournamentName}</span>
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              if (hasExistingPlayoffs) {
-                const confirmed = window.confirm(
-                  "Ya existen llaves. Regenerar borrara las actuales. Continuar?"
-                );
-                if (!confirmed) return;
-              }
-              handleGenerate(undefined, hasExistingPlayoffs);
-            }}
-            disabled={generating === "ALL" || playoffCategories.length === 0}
-            className="inline-flex items-center justify-center rounded-full bg-indigo-600 px-5 py-2 text-xs font-semibold text-white shadow-[0_14px_32px_-18px_rgba(79,70,229,0.45)] transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            {generating === "ALL" ? "Generando..." : "Generar llaves"}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {tournamentStatus === "ACTIVE" &&
+              (sessionRole === "ADMIN" || sessionRole === "TOURNAMENT_ADMIN") &&
+              allMatchesComplete && (
+              <button
+                type="button"
+                onClick={handleFinishTournament}
+                disabled={finishing}
+                className="inline-flex items-center justify-center rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {finishing ? "Finalizando..." : "Terminar torneo"}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                if (hasExistingPlayoffs) {
+                  const confirmed = window.confirm(
+                    "Ya existen llaves. Regenerar borrara las actuales. Continuar?"
+                  );
+                  if (!confirmed) return;
+                }
+                handleGenerate(undefined, hasExistingPlayoffs);
+              }}
+              disabled={generating === "ALL" || playoffCategories.length === 0}
+              className="inline-flex items-center justify-center rounded-full bg-indigo-600 px-5 py-2 text-xs font-semibold text-white shadow-[0_14px_32px_-18px_rgba(79,70,229,0.45)] transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {generating === "ALL" ? "Generando..." : "Generar llaves"}
+            </button>
+          </div>
         </div>
         <p className="mt-3 text-sm text-slate-600">
           Se generan las llaves con el mejor contra el peor segun el ranking de
