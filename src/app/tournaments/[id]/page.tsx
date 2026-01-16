@@ -21,7 +21,7 @@ export default async function TournamentPublicPage({
   const tournament = await prisma.tournament.findUnique({
     where: { id: resolvedParams?.id },
     include: {
-      league: { select: { id: true, name: true } },
+      league: { select: { id: true, name: true, photoUrl: true } },
       sport: { select: { id: true, name: true } },
       owner: { select: { name: true, email: true } },
       clubs: true,
@@ -41,9 +41,36 @@ export default async function TournamentPublicPage({
       registrations: {
         orderBy: { createdAt: "asc" },
         include: {
-          player: { select: { id: true, firstName: true, lastName: true } },
-          partner: { select: { id: true, firstName: true, lastName: true } },
-          partnerTwo: { select: { id: true, firstName: true, lastName: true } },
+          player: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              city: true,
+              country: true,
+              photoUrl: true,
+            },
+          },
+          partner: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              city: true,
+              country: true,
+              photoUrl: true,
+            },
+          },
+          partnerTwo: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              city: true,
+              country: true,
+              photoUrl: true,
+            },
+          },
         },
       },
       matches: {
@@ -55,19 +82,69 @@ export default async function TournamentPublicPage({
           },
           teamA: {
             include: {
-              player: { select: { id: true, firstName: true, lastName: true } },
-              partner: { select: { id: true, firstName: true, lastName: true } },
+              player: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  city: true,
+                  country: true,
+                  photoUrl: true,
+                },
+              },
+              partner: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  city: true,
+                  country: true,
+                  photoUrl: true,
+                },
+              },
               partnerTwo: {
-                select: { id: true, firstName: true, lastName: true },
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  city: true,
+                  country: true,
+                  photoUrl: true,
+                },
               },
             },
           },
           teamB: {
             include: {
-              player: { select: { id: true, firstName: true, lastName: true } },
-              partner: { select: { id: true, firstName: true, lastName: true } },
+              player: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  city: true,
+                  country: true,
+                  photoUrl: true,
+                },
+              },
+              partner: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  city: true,
+                  country: true,
+                  photoUrl: true,
+                },
+              },
               partnerTwo: {
-                select: { id: true, firstName: true, lastName: true },
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  city: true,
+                  country: true,
+                  photoUrl: true,
+                },
               },
             },
           },
@@ -119,6 +196,8 @@ export default async function TournamentPublicPage({
       id: registration.id,
       categoryId: registration.categoryId,
       teamName: registration.teamName,
+      groupName: registration.groupName,
+      rankingNumber: registration.rankingNumber,
       player: registration.player,
       partner: registration.partner,
       partnerTwo: registration.partnerTwo,
@@ -145,6 +224,8 @@ export default async function TournamentPublicPage({
             id: match.teamA.id,
             categoryId: match.teamA.categoryId,
             teamName: match.teamA.teamName,
+            groupName: match.teamA.groupName,
+            rankingNumber: match.teamA.rankingNumber,
             player: match.teamA.player,
             partner: match.teamA.partner,
             partnerTwo: match.teamA.partnerTwo,
@@ -156,6 +237,8 @@ export default async function TournamentPublicPage({
             id: match.teamB.id,
             categoryId: match.teamB.categoryId,
             teamName: match.teamB.teamName,
+            groupName: match.teamB.groupName,
+            rankingNumber: match.teamB.rankingNumber,
             player: match.teamB.player,
             partner: match.teamB.partner,
             partnerTwo: match.teamB.partnerTwo,

@@ -35,12 +35,17 @@ type Player = {
   id: string;
   firstName: string;
   lastName: string;
+  city?: string | null;
+  country?: string | null;
+  photoUrl?: string | null;
 };
 
 type Registration = {
   id: string;
   categoryId: string;
   teamName?: string | null;
+  groupName?: string | null;
+  rankingNumber?: number | null;
   player: Player;
   partner?: Player | null;
   partnerTwo?: Player | null;
@@ -88,7 +93,7 @@ type TournamentPublicData = {
   rulesText?: string | null;
   playDays: string[];
   sport?: { id: string; name: string } | null;
-  league?: { id: string; name: string } | null;
+  league?: { id: string; name: string; photoUrl?: string | null } | null;
   owner?: { name?: string | null; email?: string | null } | null;
   clubs: Club[];
   sponsors: Sponsor[];
@@ -102,6 +107,7 @@ type TabKey =
   | "info"
   | "participants"
   | "times"
+  | "groups"
   | "fixture"
   | "results"
   | "prizes"
@@ -111,6 +117,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "info", label: "Info" },
   { key: "participants", label: "Participantes" },
   { key: "times", label: "Tiempos" },
+  { key: "groups", label: "Sembrado" },
   { key: "fixture", label: "Fixture" },
   { key: "results", label: "Resultados" },
   { key: "prizes", label: "Premios" },
@@ -153,6 +160,22 @@ const formatMatchScore = (match: Match) => {
   return parts.length ? parts.join(" | ") : null;
 };
 
+const describePrizePlace = (placeFrom: number, placeTo?: number | null) => {
+  const toValue = placeTo ?? placeFrom;
+  if (placeFrom === toValue) {
+    if (placeFrom === 1) return "1er lugar";
+    if (placeFrom === 2) return "2do lugar";
+    if (placeFrom === 3) return "3er lugar";
+    if (placeFrom === 4) return "4to lugar";
+    if (placeFrom === 5) return "5to lugar";
+    return `Lugar ${placeFrom}`;
+  }
+  if (placeFrom === 3 && toValue === 4) return "Semifinal";
+  if (placeFrom === 5 && toValue === 8) return "Cuartos de final";
+  if (placeFrom === 1 && toValue === 2) return "Final";
+  return `Lugar ${placeFrom} a ${toValue}`;
+};
+
 const playerLabel = (player?: Player | null) =>
   player ? `${player.firstName} ${player.lastName}` : "Por definir";
 
@@ -169,12 +192,30 @@ const teamLabel = (registration?: Registration | null) => {
   return names.join(" / ");
 };
 
+const teamMembersLabel = (registration: Registration) => {
+  const members = [registration.player, registration.partner, registration.partnerTwo].filter(
+    Boolean
+  ) as Player[];
+  return members.map((member) => `${member.firstName} ${member.lastName}`).join(" / ");
+};
+
+const registrationLocation = (registration: Registration) => {
+  const members = [registration.player, registration.partner, registration.partnerTwo].filter(
+    Boolean
+  ) as Player[];
+  const city = members.find((member) => member.city)?.city ?? "";
+  const country = members.find((member) => member.country)?.country ?? "";
+  return [city, country].filter(Boolean).join(", ");
+};
+
 export default function TournamentPublic({
   tournament,
 }: {
   tournament: TournamentPublicData;
 }) {
   const [tab, setTab] = useState<TabKey>("info");
+  const [participantQuery, setParticipantQuery] = useState("");
+  const [participantDraft, setParticipantDraft] = useState("");
 
   const categoriesById = useMemo(() => {
     const map = new Map<string, Category>();
@@ -184,15 +225,91 @@ export default function TournamentPublic({
     return map;
   }, [tournament.categories]);
 
-  const registrationsByCategory = useMemo(() => {
-    const map = new Map<string, Registration[]>();
+  const normalizedParticipantQuery = participantQuery.trim().toLowerCase();
+
+  const participantRows = useMemo(() => {
+    const rows: {
+      id: string;
+      player: Player;
+      category: Category;
+      teamName: string | null;
+      location: string;
+      createdAt: string;
+    }[] = [];
+
     tournament.registrations.forEach((registration) => {
-      const list = map.get(registration.categoryId) ?? [];
-      list.push(registration);
-      map.set(registration.categoryId, list);
+      const category =
+        categoriesById.get(registration.categoryId) ??
+        tournament.categories.find((entry) => entry.categoryId === registration.categoryId)
+          ?.category;
+      if (!category) return;
+      const members = [registration.player, registration.partner, registration.partnerTwo].filter(
+        Boolean
+      ) as Player[];
+      const location = registrationLocation(registration);
+      members.forEach((member) => {
+        rows.push({
+          id: `${registration.id}-${member.id}`,
+          player: member,
+          category,
+          teamName: registration.teamName ?? null,
+          location,
+          createdAt: registration.createdAt,
+        });
+      });
     });
-    return map;
-  }, [tournament.registrations]);
+    return rows;
+  }, [tournament.registrations, tournament.categories, categoriesById]);
+
+  const filteredParticipantRows = useMemo(() => {
+    if (!normalizedParticipantQuery) return participantRows;
+    return participantRows.filter((row) => {
+      const name = `${row.player.firstName} ${row.player.lastName}`.toLowerCase();
+      const teamName = (row.teamName ?? "").toLowerCase();
+      const category = `${row.category.name} ${row.category.abbreviation}`.toLowerCase();
+      const location = row.location.toLowerCase();
+      const combined = [name, teamName, category, location].join(" ");
+      return combined.includes(normalizedParticipantQuery);
+    });
+  }, [participantRows, normalizedParticipantQuery]);
+
+  const groupSeedings = useMemo(() => {
+    const map = new Map<
+      string,
+      { category: Category; groups: Map<string, Registration[]> }
+    >();
+    tournament.registrations.forEach((registration) => {
+      const category =
+        categoriesById.get(registration.categoryId) ??
+        tournament.categories.find((entry) => entry.categoryId === registration.categoryId)
+          ?.category;
+      if (!category) return;
+      if (!registration.groupName) return;
+      const entry = map.get(registration.categoryId) ?? {
+        category,
+        groups: new Map<string, Registration[]>(),
+      };
+      const groupKey = registration.groupName.trim() || "A";
+      const list = entry.groups.get(groupKey) ?? [];
+      list.push(registration);
+      entry.groups.set(groupKey, list);
+      map.set(registration.categoryId, entry);
+    });
+
+    return Array.from(map.values()).map((entry) => {
+      const groups = Array.from(entry.groups.entries()).map(([key, list]) => {
+        const sorted = [...list].sort((a, b) => {
+          const rankA = a.rankingNumber ?? Number.MAX_SAFE_INTEGER;
+          const rankB = b.rankingNumber ?? Number.MAX_SAFE_INTEGER;
+          if (rankA !== rankB) return rankA - rankB;
+          return a.createdAt.localeCompare(b.createdAt);
+        });
+        return { key, list: sorted };
+      });
+      groups.sort((a, b) => a.key.localeCompare(b.key));
+      return { category: entry.category, groups };
+    });
+  }, [tournament.registrations, categoriesById, tournament.categories]);
 
   const matchesByDate = useMemo(() => {
     const map = new Map<string, Match[]>();
@@ -220,6 +337,18 @@ export default function TournamentPublic({
     [tournament.matches]
   );
 
+  const prizesByCategory = useMemo(() => {
+    const map = new Map<string, { category: Category | null; prizes: Prize[] }>();
+    tournament.prizes.forEach((prize) => {
+      const category = prize.category ?? null;
+      const key = prize.categoryId;
+      const entry = map.get(key) ?? { category, prizes: [] };
+      entry.prizes.push(prize);
+      map.set(key, entry);
+    });
+    return Array.from(map.values());
+  }, [tournament.prizes]);
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
       <div className="relative overflow-hidden border-b border-white/10 bg-[radial-gradient(1200px_circle_at_10%_20%,rgba(59,130,246,0.25),transparent_55%),radial-gradient(900px_circle_at_90%_0%,rgba(14,165,233,0.25),transparent_50%)]">
@@ -240,16 +369,31 @@ export default function TournamentPublic({
                   "Informacion oficial del torneo y detalles para los jugadores."}
               </p>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-slate-200">
-              <p className="font-semibold text-white">
-                {tournament.league?.name ?? "Sin liga"}
-              </p>
-              <p className="mt-1 text-slate-300">
-                {tournament.sport?.name ?? "Sin deporte"}
-              </p>
-              <p className="mt-1 text-slate-300">
-                Inicio: {formatDateShort(tournament.startDate)}
-              </p>
+            <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-slate-200">
+              <div className="h-16 w-24 overflow-hidden rounded-xl border border-white/10 bg-white/10">
+                {tournament.league?.photoUrl ? (
+                  <img
+                    src={tournament.league.photoUrl}
+                    alt={tournament.league.name}
+                    className="h-full w-full object-contain p-1"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-[10px] text-slate-400">
+                    Sin foto
+                  </div>
+                )}
+              </div>
+              <div>
+                <p className="font-semibold text-white">
+                  {tournament.league?.name ?? "Sin liga"}
+                </p>
+                <p className="mt-1 text-slate-300">
+                  {tournament.sport?.name ?? "Sin deporte"}
+                </p>
+                <p className="mt-1 text-slate-300">
+                  Inicio: {formatDateShort(tournament.startDate)}
+                </p>
+              </div>
             </div>
           </div>
 
@@ -352,47 +496,93 @@ export default function TournamentPublic({
 
         {tab === "participants" && (
           <section className="mt-8 space-y-6">
-            {tournament.categories.map((entry) => {
-              const list = registrationsByCategory.get(entry.categoryId) ?? [];
-              return (
-                <div
-                  key={`participants-${entry.categoryId}`}
-                  className="rounded-3xl border border-white/10 bg-white/5 p-6"
+            <div className="flex flex-wrap items-center gap-3 rounded-3xl border border-white/10 bg-white/5 p-5">
+              <div className="flex-1">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                  Filtrar participantes
+                </p>
+                <input
+                  type="text"
+                  value={participantDraft}
+                  onChange={(e) => setParticipantDraft(e.target.value)}
+                  placeholder="Equipo, jugador, ciudad o pais"
+                  className="mt-2 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-slate-100 placeholder:text-slate-400 focus:border-cyan-300 focus:outline-none"
+                />
+              </div>
+              <div className="flex items-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setParticipantQuery(participantDraft)}
+                  className="rounded-full bg-cyan-400/90 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-900"
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <h3 className="text-lg font-semibold text-white">
-                        {entry.category.name}
-                      </h3>
-                      <p className="text-xs text-slate-300">
-                        {entry.category.abbreviation} · {list.length} inscritos
-                      </p>
-                    </div>
-                  </div>
-                  {list.length === 0 ? (
-                    <p className="mt-4 text-sm text-slate-300">
-                      Sin inscritos.
-                    </p>
-                  ) : (
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      {list.map((registration) => (
-                        <div
-                          key={registration.id}
-                          className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm"
-                        >
-                          <p className="font-semibold text-white">
-                            {teamLabel(registration)}
-                          </p>
-                          <p className="mt-1 text-xs text-slate-300">
-                            Inscrito: {formatDateShort(registration.createdAt)}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  Filtrar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setParticipantDraft("");
+                    setParticipantQuery("");
+                  }}
+                  className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-200"
+                >
+                  Limpiar
+                </button>
+              </div>
+            </div>
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-semibold text-white">
+                    Participantes inscritos
+                  </h3>
+                  <p className="text-xs text-slate-300">
+                    {filteredParticipantRows.length} jugadores encontrados
+                  </p>
                 </div>
-              );
-            })}
+              </div>
+              {filteredParticipantRows.length === 0 ? (
+                <p className="mt-4 text-sm text-slate-300">Sin inscritos.</p>
+              ) : (
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  {filteredParticipantRows.map((row) => (
+                    <div
+                      key={row.id}
+                      className="flex gap-3 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm"
+                    >
+                      <div className="h-14 w-14 overflow-hidden rounded-xl border border-white/10 bg-white/10">
+                        {row.player.photoUrl ? (
+                          <img
+                            src={row.player.photoUrl}
+                            alt={row.player.firstName}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-xs text-slate-400">
+                            Sin foto
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-white">
+                          {row.player.firstName} {row.player.lastName}
+                        </p>
+                        <p className="mt-1 text-xs text-cyan-200">
+                          {row.category.name} ({row.category.abbreviation})
+                        </p>
+                        {row.teamName && (
+                          <p className="mt-1 text-xs text-slate-300">
+                            Equipo: {row.teamName}
+                          </p>
+                        )}
+                        <p className="mt-1 text-xs text-slate-300">
+                          {row.location || "Sin ubicacion"}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </section>
         )}
 
@@ -439,6 +629,72 @@ export default function TournamentPublic({
                 ))}
               </div>
             </div>
+          </section>
+        )}
+
+        {tab === "groups" && (
+          <section className="mt-8 space-y-6">
+            {groupSeedings.length === 0 ? (
+              <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-sm text-slate-300">
+                Aun no hay sembrado de grupos.
+              </div>
+            ) : (
+              groupSeedings.map((entry) => (
+                <div
+                  key={`groups-${entry.category.id}`}
+                  className="rounded-3xl border border-white/10 bg-white/5 p-6"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-lg font-semibold text-white">
+                        {entry.category.name}
+                      </h3>
+                      <p className="text-xs text-slate-300">
+                        {entry.category.abbreviation}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    {entry.groups.map((group) => (
+                      <div
+                        key={`group-table-${entry.category.id}-${group.key}`}
+                        className="overflow-hidden rounded-2xl border border-white/10 bg-white/10"
+                      >
+                        <div className="bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">
+                          Grupo {group.key}
+                        </div>
+                        <table className="min-w-full text-xs text-slate-200">
+                          <thead className="bg-white/5 uppercase tracking-[0.2em] text-slate-300">
+                            <tr>
+                              <th className="px-3 py-2 text-left">Ranking</th>
+                              <th className="px-3 py-2 text-left">Jugador/Equipo</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/5">
+                            {group.list.map((registration) => (
+                              <tr key={registration.id}>
+                                <td className="px-3 py-2">
+                                  {registration.rankingNumber ?? "-"}
+                                </td>
+                                <td className="px-3 py-2">
+                                  <p className="font-semibold text-white">
+                                    {teamLabel(registration)}
+                                  </p>
+                                  <p className="mt-1 text-[11px] text-slate-300">
+                                    {teamMembersLabel(registration)}
+                                  </p>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))
+            )}
           </section>
         )}
 
@@ -569,21 +825,56 @@ export default function TournamentPublic({
                 Premios por definir.
               </div>
             ) : (
-              tournament.prizes.map((prize) => (
+              prizesByCategory.map((entry, index) => (
                 <div
-                  key={prize.id}
+                  key={`prize-category-${entry.category?.id ?? index}`}
                   className="rounded-3xl border border-white/10 bg-white/5 p-6"
                 >
-                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                    {prize.category?.name ?? "Categoria"}
-                  </p>
-                  <p className="mt-2 text-base font-semibold text-white">
-                    Puesto {prize.placeFrom}
-                    {prize.placeTo ? ` - ${prize.placeTo}` : ""}
-                  </p>
-                  <p className="mt-2 text-sm text-slate-300">
-                    {prize.amount ? `Bs ${prize.amount}` : prize.prizeText ?? "-"}
-                  </p>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.25em] text-cyan-200/80">
+                        Categoria
+                      </p>
+                      <h3 className="mt-2 text-xl font-semibold text-white">
+                        {entry.category?.name ?? "Categoria"}
+                      </h3>
+                      {entry.category?.abbreviation && (
+                        <p className="mt-1 text-xs text-slate-300">
+                          {entry.category.abbreviation}
+                        </p>
+                      )}
+                    </div>
+                    <span className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-xs font-semibold text-slate-200">
+                      {entry.prizes.length} premio(s)
+                    </span>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    {entry.prizes.map((prize) => (
+                      <div
+                        key={prize.id}
+                        className="rounded-2xl border border-white/10 bg-white/10 p-4"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-white">
+                              {describePrizePlace(prize.placeFrom, prize.placeTo)}
+                            </p>
+                            <p className="mt-1 text-xs text-slate-300">
+                              Desde {prize.placeFrom} hasta{" "}
+                              {prize.placeTo ?? prize.placeFrom}
+                            </p>
+                          </div>
+                          <div className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-semibold text-slate-200">
+                            {prize.amount ? `Bs ${prize.amount}` : "Premio"}
+                          </div>
+                        </div>
+                        <p className="mt-3 text-xs text-slate-300">
+                          {prize.prizeText ?? "-"}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))
             )}
@@ -612,6 +903,52 @@ export default function TournamentPublic({
           </section>
         )}
       </div>
+
+      <footer className="border-t border-white/10 bg-slate-950/90">
+        <div className="mx-auto grid w-full max-w-6xl gap-6 px-6 py-10 text-xs text-slate-300 md:grid-cols-[1.2fr_1fr_1fr]">
+          <div className="space-y-3">
+            <p className="text-sm font-semibold text-white">Soporte y contacto</p>
+            <p>
+              Si tienes problemas o quieres crear tu torneo, contacta a Miguel
+              Arteaga: <span className="text-cyan-200">+59160021284</span>
+            </p>
+            <p className="text-slate-400">Ubicacion: Santa Cruz, Bolivia</p>
+            <p className="text-slate-400">
+              ¿Quieres ser sponsor? Escribe a{" "}
+              <span className="text-cyan-200">miguelarte202@gmail.com</span>
+            </p>
+          </div>
+          <div className="space-y-3">
+            <p className="text-sm font-semibold text-white">Politicas basicas</p>
+            <ul className="space-y-2 text-slate-400">
+              <li>• Los datos se usan solo para gestionar el torneo.</li>
+              <li>• Los resultados publicados son responsabilidad del organizador.</li>
+              <li>• No compartimos informacion con terceros sin permiso.</li>
+            </ul>
+          </div>
+          <div className="space-y-3">
+            <p className="text-sm font-semibold text-white">Creado por</p>
+            <a
+              href="https://migartec.com"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-slate-200 transition hover:border-white/20"
+            >
+              <img
+                src="https://migartec.com/logo_migartec.png"
+                alt="Migartec"
+                className="h-10 w-24 object-contain"
+              />
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+                  Migartec
+                </p>
+                <p className="font-semibold text-white">migartec.com</p>
+              </div>
+            </a>
+          </div>
+        </div>
+      </footer>
     </main>
   );
 }
