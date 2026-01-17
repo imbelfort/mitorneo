@@ -17,8 +17,43 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Mi Torneo | Login",
-  description: "Inicio de sesión con Next.js y Prisma",
+  title: {
+    default: "MiTorneo - Gestión de Torneos de Ráquet y Frontón",
+    template: "%s | MiTorneo",
+  },
+  description:
+    "Organiza, gestiona y sigue torneos de Ráquet y Frontón en tiempo real. Fixtures automatizados, rankings, inscripciones y resultados en vivo. La plataforma líder en gestión deportiva.",
+  keywords: [
+    "raquet",
+    "fronton",
+    "torneos",
+    "campeonatos",
+    "bolivia",
+    "deporte",
+    "gestion deportiva",
+    "fixtures",
+    "resultados en vivo",
+  ],
+  authors: [{ name: "Migartec", url: "https://migartec.com" }],
+  creator: "Migartec",
+  openGraph: {
+    type: "website",
+    locale: "es_BO",
+    url: "https://mitorneo.com",
+    title: "MiTorneo - Gestión de Torneos de Ráquet y Frontón",
+    description:
+      "La plataforma integral para torneos deportivos. Gestiona inscripciones, brackets y resultados de forma profesional.",
+    siteName: "MiTorneo",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "MiTorneo - Gestión Profesional de Torneos",
+    description: "Organiza tu torneo de Ráquet o Frontón en minutos.",
+    creator: "@migartec",
+  },
+  icons: {
+    icon: "/favicon.ico",
+  },
 };
 
 import Footer from "@/components/layout/footer";
