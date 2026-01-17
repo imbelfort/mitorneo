@@ -119,7 +119,7 @@ export default function RegisterPage() {
 
                     <div className="space-y-2">
                         <label htmlFor="phone" className="text-sm font-medium text-slate-700">
-                            TelA(c)fono
+                            Telefono
                         </label>
                         <input
                             id="phone"

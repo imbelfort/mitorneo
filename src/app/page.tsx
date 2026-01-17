@@ -13,6 +13,15 @@ import {
 } from "lucide-react";
 import HeroCarousel from "@/components/ui/hero-carousel";
 import Image from "next/image";
+import { prisma } from "@/lib/prisma";
+
+const formatDate = (date: Date | null) => {
+  if (!date) return "Fecha por definir";
+  return new Intl.DateTimeFormat("es-BO", {
+    day: "numeric",
+    month: "long",
+  }).format(date);
+};
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -20,21 +29,12 @@ export const revalidate = 0;
 export default async function Home() {
   const session = await getServerSession(authOptions);
 
-  // This would ideally come from the database
-  const activeTournaments = [
-    {
-      id: "demo-1",
-      name: "Torneo Abierto Clausura 2026",
-      sport: "Ráquet",
-      date: "25 de Enero"
-    },
-    {
-      id: "demo-2",
-      name: "Liga Nacional de Frontón",
-      sport: "Frontón",
-      date: "10 de Febrero"
-    }
-  ];
+  // Fetch the 3 most recent tournaments
+  const activeTournaments = await prisma.tournament.findMany({
+    take: 3,
+    orderBy: { startDate: "desc" },
+    include: { sport: true },
+  });
 
   return (
     <main className="min-h-screen bg-slate-50" suppressHydrationWarning>
@@ -212,8 +212,8 @@ export default async function Home() {
         <div className="container mx-auto px-6">
           <div className="flex flex-col md:flex-row justify-between items-end mb-12 gap-4">
             <div>
-              <h2 className="text-3xl font-bold text-slate-900">Torneos Destacados</h2>
-              <p className="mt-2 text-slate-600">Próximos eventos en la plataforma</p>
+              <h2 className="text-3xl font-bold text-slate-900">Últimos torneos</h2>
+              <p className="mt-2 text-slate-600">Eventos recientes en la plataforma</p>
             </div>
             <Link href="/tournaments" className="text-indigo-600 font-semibold hover:text-indigo-700 flex items-center gap-1">
               Ver todos <ArrowRight className="h-4 w-4" />
@@ -234,11 +234,11 @@ export default async function Home() {
                 <div className="p-6">
                   <div className="mb-3 flex items-center justify-between">
                     <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600 uppercase tracking-wide">
-                      {tour.sport}
+                      {tour.sport?.name || "Torneo"}
                     </span>
                     <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
                       <Calendar className="h-3.5 w-3.5" />
-                      {tour.date}
+                      {formatDate(tour.startDate)}
                     </div>
                   </div>
                   <h3 className="text-lg font-bold text-slate-900 mb-4 line-clamp-1">
