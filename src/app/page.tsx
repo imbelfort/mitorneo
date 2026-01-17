@@ -276,17 +276,7 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* Mobile Auth Panel (visible only on small screens) */}
-      {!session && (
-        <section className="xl:hidden py-12 bg-slate-50 border-t border-slate-200">
-          <div className="container mx-auto px-6">
-            <h3 className="text-xl font-bold text-slate-900 mb-6 text-center">Acceder a mi cuenta</h3>
-            <div className="max-w-md mx-auto">
-              <AuthPanel session={session} />
-            </div>
-          </div>
-        </section>
-      )}
+
     </main>
   );
 }
