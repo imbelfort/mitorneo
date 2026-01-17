@@ -21,6 +21,8 @@ export const metadata: Metadata = {
   description: "Inicio de sesión con Next.js y Prisma",
 };
 
+import Footer from "@/components/layout/footer";
+
 export default async function RootLayout({
   children,
 }: Readonly<{
@@ -36,7 +38,10 @@ export default async function RootLayout({
       >
         <Providers session={session}>
           <HeaderBar />
-          {children}
+          <div className="flex min-h-screen flex-col">
+            <div className="flex-1">{children}</div>
+            <Footer />
+          </div>
         </Providers>
       </body>
     </html>

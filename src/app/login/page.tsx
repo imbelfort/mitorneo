@@ -36,7 +36,8 @@ export default function LoginPage() {
       return;
     }
 
-    router.push(callbackUrl);
+    const redirectUrl = callbackUrl === "/" ? "/admin" : callbackUrl;
+    router.push(redirectUrl);
     router.refresh();
   };
 

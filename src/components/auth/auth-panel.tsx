@@ -69,7 +69,7 @@ export default function AuthPanel({ session }: AuthPanelProps) {
         return;
       }
 
-      router.push("/");
+      router.push("/admin");
       router.refresh();
       return;
     }
@@ -88,7 +88,7 @@ export default function AuthPanel({ session }: AuthPanelProps) {
       return;
     }
 
-    router.push("/");
+    router.push("/admin");
     router.refresh();
   };
 
@@ -129,22 +129,20 @@ export default function AuthPanel({ session }: AuthPanelProps) {
           <button
             type="button"
             onClick={() => setMode("signup")}
-            className={`rounded-full px-3 py-1.5 transition ${
-              mode === "signup"
-                ? "bg-indigo-600 text-white shadow-sm"
-                : "hover:bg-slate-100"
-            }`}
+            className={`rounded-full px-3 py-1.5 transition ${mode === "signup"
+              ? "bg-indigo-600 text-white shadow-sm"
+              : "hover:bg-slate-100"
+              }`}
           >
             Crear cuenta
           </button>
           <button
             type="button"
             onClick={() => setMode("signin")}
-            className={`rounded-full px-3 py-1.5 transition ${
-              mode === "signin"
-                ? "bg-slate-900 text-white shadow-sm"
-                : "hover:bg-slate-100"
-            }`}
+            className={`rounded-full px-3 py-1.5 transition ${mode === "signin"
+              ? "bg-slate-900 text-white shadow-sm"
+              : "hover:bg-slate-100"
+              }`}
           >
             Iniciar sesion
           </button>
@@ -225,8 +223,8 @@ export default function AuthPanel({ session }: AuthPanelProps) {
           {loading
             ? "Procesando..."
             : mode === "signup"
-            ? "Crear cuenta y entrar"
-            : "Entrar"}
+              ? "Crear cuenta y entrar"
+              : "Entrar"}
         </button>
       </form>
     </div>
