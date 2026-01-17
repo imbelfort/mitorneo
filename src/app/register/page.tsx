@@ -2,6 +2,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { signIn } from "next-auth/react";
@@ -74,16 +75,25 @@ export default function RegisterPage() {
     return (
         <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-white to-slate-100 px-6 py-10">
             <div className="w-full max-w-lg rounded-3xl bg-white p-10 shadow-xl ring-1 ring-slate-200">
-                <div className="mb-6 flex flex-col gap-2">
-                    <p className="text-sm font-semibold uppercase tracking-wide text-indigo-600">
-                        Registro
-                    </p>
-                    <h1 className="text-3xl font-semibold text-slate-900">
-                        Crea tu cuenta
-                    </h1>
-                    <p className="text-sm text-slate-600">
-                        Empieza a organizar tus torneos en minutos.
-                    </p>
+                <div className="mb-8 flex flex-col items-center gap-4 text-center">
+                    <Link href="/">
+                        <Image
+                            src="/logo/logo2.png"
+                            alt="MiTorneo"
+                            width={240}
+                            height={80}
+                            className="h-16 w-auto object-contain"
+                            priority
+                        />
+                    </Link>
+                    <div>
+                        <h1 className="text-2xl font-bold text-slate-900">
+                            Crea tu cuenta
+                        </h1>
+                        <p className="mt-2 text-sm text-slate-600">
+                            Empieza a organizar tus torneos en minutos
+                        </p>
+                    </div>
                 </div>
 
                 <form className="space-y-5 md:grid md:grid-cols-2 md:gap-4 md:space-y-0" onSubmit={handleSubmit}>

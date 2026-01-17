@@ -95,16 +95,16 @@ export default async function Home() {
       <section className="py-12 bg-white sm:py-20">
         <div className="container mx-auto px-6">
           <div className="text-center mb-16">
-            <h2 className="flex flex-wrap items-center justify-center gap-2 text-3xl font-bold text-slate-900 sm:text-4xl">
+            <h2 className="flex flex-wrap items-center justify-center text-3xl font-bold text-slate-900 sm:text-4xl">
               ¿Qué podés hacer con
               <Image
                 src="/logo/logo2.png"
                 alt="MiTorneo"
                 width={200}
                 height={60}
-                className="h-12 w-auto object-contain sm:h-16"
+                className="mx-2 h-12 w-auto object-contain sm:h-16"
               />
-              ?
+              <span className="-ml-2">?</span>
             </h2>
             <p className="mt-4 text-lg text-slate-600">
               Todo lo que necesitas para gestionar tu competencia en un solo lugar.

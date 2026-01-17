@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useState } from "react";
@@ -44,17 +45,25 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-white to-slate-100 px-6 py-10">
       <div className="w-full max-w-lg rounded-3xl bg-white p-10 shadow-xl ring-1 ring-slate-200">
-        <div className="mb-6 flex flex-col gap-2">
-          <p className="text-sm font-semibold uppercase tracking-wide text-indigo-600">
-            Login
-          </p>
-          <h1 className="text-3xl font-semibold text-slate-900">
-            Inicia sesión
-          </h1>
-          <p className="text-sm text-slate-600">
-            Usa el usuario demo: <span className="font-medium">demo@example.com</span>{" "}
-            / <span className="font-medium">password123</span>
-          </p>
+        <div className="mb-8 flex flex-col items-center gap-4 text-center">
+          <Link href="/">
+            <Image
+              src="/logo/logo2.png"
+              alt="MiTorneo"
+              width={240}
+              height={80}
+              className="h-16 w-auto object-contain"
+              priority
+            />
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">
+              Bienvenido de nuevo
+            </h1>
+            <p className="mt-2 text-sm text-slate-600">
+              Ingresa tus credenciales para acceder
+            </p>
+          </div>
         </div>
 
         <form className="space-y-5" onSubmit={handleSubmit}>
