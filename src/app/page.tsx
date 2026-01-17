@@ -60,7 +60,6 @@ export default async function Home() {
                   href="/admin"
                   className="group flex w-full items-center justify-center gap-2 rounded-full bg-indigo-600 px-8 py-3.5 text-base font-bold text-white shadow-lg transition-all hover:bg-indigo-700 hover:shadow-indigo-500/30 hover:scale-105 active:scale-95 sm:w-auto"
                 >
-                  <Trophy className="h-5 w-5" />
                   Crear Torneo
                 </Link>
               ) : (
@@ -68,7 +67,6 @@ export default async function Home() {
                   href="/register"
                   className="group flex w-full items-center justify-center gap-2 rounded-full bg-indigo-600 px-8 py-3.5 text-base font-bold text-white shadow-lg transition-all hover:bg-indigo-700 hover:shadow-indigo-500/30 hover:scale-105 active:scale-95 sm:w-auto"
                 >
-                  <Trophy className="h-5 w-5" />
                   Crear Torneo
                 </Link>
               )}
@@ -97,8 +95,16 @@ export default async function Home() {
       <section className="py-12 bg-white sm:py-20">
         <div className="container mx-auto px-6">
           <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-slate-900 sm:text-4xl">
-              ¿Qué podés hacer con MiTorneo?
+            <h2 className="flex flex-wrap items-center justify-center gap-2 text-3xl font-bold text-slate-900 sm:text-4xl">
+              ¿Qué podés hacer con
+              <Image
+                src="/logo/logo2.png"
+                alt="MiTorneo"
+                width={200}
+                height={60}
+                className="h-12 w-auto object-contain sm:h-16"
+              />
+              ?
             </h2>
             <p className="mt-4 text-lg text-slate-600">
               Todo lo que necesitas para gestionar tu competencia en un solo lugar.

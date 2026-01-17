@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { signOut, useSession } from "next-auth/react";
 import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -45,11 +46,15 @@ export default function HeaderBar() {
               <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
             </button>
           )}
-          <Link
-            href="/"
-            className="text-xs font-semibold uppercase tracking-[0.35em] text-indigo-600 transition hover:text-indigo-700"
-          >
-            Mi Torneo
+          <Link href="/">
+            <Image
+              src="/logo/logo1.png"
+              alt="Mi Torneo"
+              width={200}
+              height={60}
+              className="h-14 w-auto object-contain"
+              priority
+            />
           </Link>
         </div>
 
