@@ -61,7 +61,13 @@ export default async function CategoriesAdminPage() {
             Registra categorias que luego podran usarse en los torneos.
           </p>
           <div className="mt-10">
-            <CategoriesManager sports={sports} initialCategories={categories} />
+            <CategoriesManager
+              sports={sports}
+              initialCategories={categories}
+              canEdit
+              currentUserId={session.user.id}
+              currentUserRole={session.user.role}
+            />
           </div>
         </section>
       </div>

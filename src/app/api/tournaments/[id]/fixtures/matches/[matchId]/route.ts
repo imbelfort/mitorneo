@@ -1,5 +1,6 @@
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { randomBytes } from "crypto";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
@@ -335,6 +336,7 @@ export async function PATCH(
       outcomeSide: true,
       stage: true,
       isBronzeMatch: true,
+      refereeToken: true,
     },
   });
 
@@ -526,6 +528,38 @@ export async function PATCH(
     data.winnerSide = parsedWinner;
   }
 
+  if ("liveState" in body) {
+    if (body.liveState === null) {
+      data.liveState = null;
+    } else if (typeof body.liveState === "object") {
+      data.liveState = body.liveState;
+    } else {
+      return NextResponse.json({ error: "Estado en vivo invalido" }, { status: 400 });
+    }
+  }
+
+  if ("refereeToken" in body) {
+    const tokenRaw = body.refereeToken as string | null | undefined;
+    if (tokenRaw === null || tokenRaw === "") {
+      data.refereeToken = null;
+    } else if (typeof tokenRaw === "string") {
+      const trimmed = tokenRaw.trim();
+      if (!trimmed) {
+        data.refereeToken = null;
+      } else {
+        data.refereeToken = trimmed;
+      }
+    } else {
+      return NextResponse.json({ error: "Token invalido" }, { status: 400 });
+    }
+  }
+
+  if (body.generateRefereeToken === true) {
+    if (!match.refereeToken) {
+      data.refereeToken = `ref_${randomBytes(16).toString("hex")}`;
+    }
+  }
+
   const updated = await prisma.tournamentMatch.update({
     where: { id: matchId },
     data,
@@ -536,6 +570,8 @@ export async function PATCH(
       scheduledDate: true,
       startTime: true,
       games: true,
+      liveState: true,
+      refereeToken: true,
       winnerSide: true,
       outcomeType: true,
       outcomeSide: true,
@@ -574,6 +610,8 @@ export async function PATCH(
         : null,
       startTime: updated.startTime,
       games: updated.games,
+      liveState: updated.liveState,
+      refereeToken: updated.refereeToken,
       winnerSide: updated.winnerSide,
       outcomeType: updated.outcomeType,
       outcomeSide: updated.outcomeSide,

@@ -14,6 +14,7 @@ model User {
   id            String       @id @default(cuid())
   name          String?
   email         String       @unique
+  phone         String?
   passwordHash  String
   role          Role         @default(TOURNAMENT_ADMIN)
   emailVerified DateTime?
@@ -23,6 +24,8 @@ model User {
   sessions      Session[]
   tournaments   Tournament[] @relation("TournamentOwner")
   leagues       League[]     @relation("LeagueOwner")
+  createdPlayers Player[]    @relation("PlayerCreator")
+  createdCategories Category[] @relation("CategoryCreator")
 }
 
 model Account {
@@ -65,6 +68,16 @@ model VerificationToken {
   updatedAt  DateTime @updatedAt
 
   @@unique([identifier, token])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
 }
 
 enum Role {
@@ -215,6 +228,7 @@ model TournamentSponsor {
 
 model Category {
   id           String            @id @default(cuid())
+  createdById  String?
   name         String
   abbreviation String
   sportId      String
@@ -230,9 +244,11 @@ model Category {
   prizes          TournamentPrize[]
   groupQualifiers TournamentGroupQualifier[]
   rankings        PlayerRanking[]
+  createdBy       User?                      @relation("CategoryCreator", fields: [createdById], references: [id])
 
   @@unique([sportId, name])
   @@unique([sportId, abbreviation])
+  @@index([createdById])
 }
 
 model TournamentGroupQualifier {
@@ -348,6 +364,8 @@ model TournamentMatch {
   scheduledDate DateTime?            @db.Date
   startTime     String?
   games         Json?
+  liveState     Json?
+  refereeToken  String?              @unique
   teamAId       String?
   teamBId       String?
   clubId        String?
@@ -403,6 +421,7 @@ model TournamentRankingPoints {
 
 model Player {
   id                      String                   @id @default(cuid())
+  createdById             String?
   documentType            DocumentType             @default(ID_CARD)
   documentNumber          String
   firstName               String
@@ -420,8 +439,10 @@ model Player {
   partnerRegistrations    TournamentRegistration[] @relation("RegistrationPartner")
   partnerTwoRegistrations TournamentRegistration[] @relation("RegistrationPartnerTwo")
   rankings                PlayerRanking[]
+  createdBy               User?                    @relation("PlayerCreator", fields: [createdById], references: [id])
 
   @@unique([documentType, documentNumber])
+  @@index([createdById])
 }
 
 model PlayerRanking {

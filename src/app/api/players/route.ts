@@ -8,13 +8,22 @@ const isValidEnumValue = <T extends string>(value: string, allowed: T[]): value 
   allowed.includes(value as T);
 
 export async function GET(request: Request) {
+  const session = await getServerSession(authOptions);
   const url = new URL(request.url);
   const status = url.searchParams.get("status");
+  const scope = url.searchParams.get("scope");
 
-  const where =
+  const baseWhere =
     status && isValidEnumValue<PlayerStatus>(status, ["UNCONFIRMED", "CONFIRMED"])
       ? { status }
       : undefined;
+
+  const where =
+    scope === "own" &&
+    session?.user?.role === "TOURNAMENT_ADMIN" &&
+    session.user.id
+      ? { ...(baseWhere ?? {}), createdById: session.user.id }
+      : baseWhere;
 
   const players = await prisma.player.findMany({
     where,
@@ -32,6 +41,7 @@ export async function GET(request: Request) {
       country: true,
       photoUrl: true,
       status: true,
+      createdById: true,
       createdAt: true,
     },
   });
@@ -78,6 +88,7 @@ export async function POST(request: Request) {
   try {
     const player = await prisma.player.create({
       data: {
+        createdById: session.user.id,
         documentType: documentType as DocumentType,
         documentNumber: documentNumber.trim(),
         firstName: (firstName as string).trim(),

@@ -19,6 +19,7 @@ export default function RegisterPage() {
         const formData = new FormData(event.currentTarget);
         const name = formData.get("name") as string;
         const email = formData.get("email") as string;
+        const phone = formData.get("phone") as string;
         const password = formData.get("password") as string;
 
         try {
@@ -31,6 +32,7 @@ export default function RegisterPage() {
                 body: JSON.stringify({
                     name: name.trim(),
                     email: email.trim(),
+                    phone: phone.trim(),
                     password,
                 }),
             });
@@ -84,7 +86,7 @@ export default function RegisterPage() {
                     </p>
                 </div>
 
-                <form className="space-y-5" onSubmit={handleSubmit}>
+                <form className="space-y-5 md:grid md:grid-cols-2 md:gap-4 md:space-y-0" onSubmit={handleSubmit}>
                     <div className="space-y-2">
                         <label htmlFor="name" className="text-sm font-medium text-slate-700">
                             Nombre completo
@@ -116,6 +118,21 @@ export default function RegisterPage() {
                     </div>
 
                     <div className="space-y-2">
+                        <label htmlFor="phone" className="text-sm font-medium text-slate-700">
+                            TelA(c)fono
+                        </label>
+                        <input
+                            id="phone"
+                            name="phone"
+                            type="tel"
+                            required
+                            autoComplete="tel"
+                            className="w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-900 shadow-sm transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                            placeholder="+591..."
+                        />
+                    </div>
+
+                    <div className="space-y-2 md:col-span-2">
                         <label
                             htmlFor="password"
                             className="text-sm font-medium text-slate-700"
@@ -135,7 +152,7 @@ export default function RegisterPage() {
                     </div>
 
                     {error && (
-                        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 md:col-span-2">
                             {error}
                         </p>
                     )}
@@ -143,7 +160,7 @@ export default function RegisterPage() {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="flex w-full items-center justify-center rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-75 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                        className="flex w-full items-center justify-center rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-75 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 md:col-span-2"
                     >
                         {loading ? "Creando cuenta..." : "Crear cuenta"}
                     </button>

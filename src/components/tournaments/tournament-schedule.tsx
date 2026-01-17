@@ -89,6 +89,8 @@ type Match = {
   scheduledDate: string | null;
   startTime: string | null;
   games?: unknown;
+  liveState?: { isLive?: boolean } | null;
+  refereeToken?: string | null;
   teamAId?: string | null;
   teamBId?: string | null;
   clubId: string | null;
@@ -449,6 +451,9 @@ export default function TournamentSchedule({ tournamentId, tournamentName }: Pro
   const [scoreError, setScoreError] = useState<string | null>(null);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set());
+  const [refereeMatchId, setRefereeMatchId] = useState<string | null>(null);
+  const [refereeMessage, setRefereeMessage] = useState<string | null>(null);
+  const [refereeError, setRefereeError] = useState<string | null>(null);
 
   const toggleTeamDetails = (registrationId: string) => {
     setExpandedTeams((prev) => {
@@ -460,6 +465,48 @@ export default function TournamentSchedule({ tournamentId, tournamentName }: Pro
       }
       return next;
     });
+  };
+
+  const handleRefereeLink = async (match: Match) => {
+    setRefereeMatchId(match.id);
+    setRefereeMessage(null);
+    setRefereeError(null);
+    try {
+      let token = match.refereeToken;
+      if (!token) {
+        const response = await fetch(
+          `/api/tournaments/${tournamentId}/fixtures/matches/${match.id}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ generateRefereeToken: true }),
+          }
+        );
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data?.error ?? "No se pudo crear el link del arbitro");
+        }
+        token = data?.match?.refereeToken ?? null;
+        if (!token) {
+          throw new Error("No se genero el token del arbitro");
+        }
+        setMatches((prev) =>
+          prev.map((item) =>
+            item.id === match.id ? { ...item, refereeToken: token } : item
+          )
+        );
+      }
+
+      const link = `${window.location.origin}/referee/${token}`;
+      await navigator.clipboard.writeText(link);
+      setRefereeMessage("Link del arbitro copiado");
+    } catch (err) {
+      setRefereeError(
+        err instanceof Error ? err.message : "No se pudo copiar el link"
+      );
+    } finally {
+      setRefereeMatchId(null);
+    }
   };
 
   const handleDownloadPdf = async () => {
@@ -1577,6 +1624,18 @@ const renderTeamDisplay = (
                                 >
                                   {hasScore ? "Editar" : "Marcador"}
                                 </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRefereeLink(match)}
+                                  disabled={refereeMatchId === match.id}
+                                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+                                >
+                                  {refereeMatchId === match.id
+                                    ? "Copiando..."
+                                    : match.refereeToken
+                                      ? "Copiar arbitro"
+                                      : "Link arbitro"}
+                                </button>
                               </div>
                             </td>
                           </tr>
@@ -1856,6 +1915,18 @@ const renderTeamDisplay = (
                                           className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
                                         >
                                           {hasScore ? "Editar" : "Marcador"}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleRefereeLink(match)}
+                                          disabled={refereeMatchId === match.id}
+                                          className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+                                        >
+                                          {refereeMatchId === match.id
+                                            ? "Copiando..."
+                                            : match.refereeToken
+                                              ? "Copiar arbitro"
+                                              : "Link arbitro"}
                                         </button>
                                       </div>
                                     ) : (
@@ -2138,6 +2209,16 @@ const renderTeamDisplay = (
       {message && (
         <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
           {message}
+        </p>
+      )}
+      {refereeMessage && (
+        <p className="rounded-lg bg-indigo-50 px-3 py-2 text-sm text-indigo-700">
+          {refereeMessage}
+        </p>
+      )}
+      {refereeError && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          {refereeError}
         </p>
       )}
     </div>

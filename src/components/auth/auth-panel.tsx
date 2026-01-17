@@ -21,10 +21,14 @@ export default function AuthPanel({ session }: AuthPanelProps) {
   const [form, setForm] = useState({
     name: "",
     email: "",
+    phone: "",
     password: "",
   });
 
-  const updateField = (field: "name" | "email" | "password", value: string) => {
+  const updateField = (
+    field: "name" | "email" | "phone" | "password",
+    value: string
+  ) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -43,6 +47,7 @@ export default function AuthPanel({ session }: AuthPanelProps) {
         body: JSON.stringify({
           name: form.name.trim(),
           email: form.email.trim(),
+          phone: form.phone.trim(),
           password: form.password,
         }),
       });
@@ -150,6 +155,16 @@ export default function AuthPanel({ session }: AuthPanelProps) {
       </div>
 
       <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+        {mode === "signin" && (
+          <div className="flex justify-end">
+            <a
+              href="/forgot-password"
+              className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
+            >
+              Olvide mi contrasena
+            </a>
+          </div>
+        )}
         {mode === "signup" && (
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700" htmlFor="name">
@@ -163,6 +178,23 @@ export default function AuthPanel({ session }: AuthPanelProps) {
               onChange={(e) => updateField("name", e.target.value)}
               className="w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-900 shadow-sm transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
               placeholder="Tu nombre"
+            />
+          </div>
+        )}
+        {mode === "signup" && (
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700" htmlFor="phone">
+              Telefono
+            </label>
+            <input
+              id="phone"
+              name="phone"
+              type="tel"
+              value={form.phone}
+              onChange={(e) => updateField("phone", e.target.value)}
+              required
+              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-900 shadow-sm transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              placeholder="+591..."
             />
           </div>
         )}

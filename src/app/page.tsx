@@ -14,6 +14,9 @@ import {
 import HeroCarousel from "@/components/ui/hero-carousel";
 import Image from "next/image";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function Home() {
   const session = await getServerSession(authOptions);
 

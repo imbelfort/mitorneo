@@ -19,9 +19,10 @@ const resolveId = (request: Request, params?: { id?: string }) => {
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
-  const id = resolveId(request, params);
+  const resolvedParams = await params;
+  const id = resolveId(request, resolvedParams);
   if (!id) {
     return NextResponse.json({ error: "Jugador no encontrado" }, { status: 404 });
   }
@@ -44,6 +45,8 @@ export async function GET(
   let matchesPlayed = 0;
   let matchesWon = 0;
   let matchesLost = 0;
+  let doubles = 0;
+  let triples = 0;
 
   if (registrations.length > 0) {
     const registrationIds = registrations.map((registration) => registration.id);
@@ -61,6 +64,7 @@ export async function GET(
         outcomeType: true,
         outcomeSide: true,
         games: true,
+        liveState: true,
       },
     });
 
@@ -103,18 +107,31 @@ export async function GET(
       } else {
         matchesLost += 1;
       }
+
+      const liveState = match.liveState as
+        | { bonusByPlayer?: Record<string, { double?: number; triple?: number }> }
+        | null
+        | undefined;
+      const bonusByPlayer = liveState?.bonusByPlayer;
+      if (bonusByPlayer && typeof bonusByPlayer === "object") {
+        const stats = bonusByPlayer[id];
+        if (stats) {
+          doubles += Number(stats.double ?? 0);
+          triples += Number(stats.triple ?? 0);
+        }
+      }
     });
   }
 
   return NextResponse.json({
     player,
-    stats: { matchesPlayed, matchesWon, matchesLost },
+    stats: { matchesPlayed, matchesWon, matchesLost, doubles, triples },
   });
 }
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session?.user || (session.user.role !== "ADMIN" && session.user.role !== "TOURNAMENT_ADMIN")) {
@@ -124,7 +141,8 @@ export async function PATCH(
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   const bodyId =
     typeof body.id === "string" && body.id.trim() ? body.id.trim() : undefined;
-  const id = params?.id ?? bodyId ?? resolveId(request, params);
+  const resolvedParams = await params;
+  const id = resolvedParams?.id ?? bodyId ?? resolveId(request, resolvedParams);
 
   if (!id) {
     return NextResponse.json({ error: "Jugador no encontrado" }, { status: 404 });
@@ -234,6 +252,24 @@ export async function PATCH(
   if (photoUrl !== undefined) data.photoUrl = photoUrl || null;
 
   try {
+    const existing = await prisma.player.findUnique({
+      where: { id },
+      select: { id: true, createdById: true },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: "Jugador no encontrado" }, { status: 404 });
+    }
+
+    if (session.user.role === "TOURNAMENT_ADMIN" && existing.createdById) {
+      if (existing.createdById !== session.user.id) {
+        return NextResponse.json(
+          { error: "Solo puedes editar tus jugadores" },
+          { status: 403 }
+        );
+      }
+    }
+
     const player =
       Object.keys(data).length === 0
         ? await prisma.player.findUnique({ where: { id } })

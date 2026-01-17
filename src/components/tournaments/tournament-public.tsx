@@ -1,6 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { BracketCanvas } from "@/components/tournaments/bracket-canvas";
+import {
+  computeTournamentStandingsByCategory,
+  type TournamentRankingData,
+} from "@/lib/ranking";
 
 type Sponsor = {
   id?: string;
@@ -28,6 +33,7 @@ type TournamentCategory = {
   price: string;
   secondaryPrice: string;
   siblingPrice: string;
+  drawType?: string | null;
   category: Category;
 };
 
@@ -43,6 +49,9 @@ type Player = {
 type Registration = {
   id: string;
   categoryId: string;
+  playerId: string;
+  partnerId?: string | null;
+  partnerTwoId?: string | null;
   teamName?: string | null;
   groupName?: string | null;
   rankingNumber?: number | null;
@@ -64,9 +73,12 @@ type Match = {
   courtNumber?: number | null;
   club?: Club | null;
   games?: unknown;
+  liveState?: { isLive?: boolean } | null;
   winnerSide?: string | null;
   outcomeType?: string | null;
   outcomeSide?: string | null;
+  teamAId?: string | null;
+  teamBId?: string | null;
   teamA?: Registration | null;
   teamB?: Registration | null;
   category?: Category | null;
@@ -101,13 +113,21 @@ type TournamentPublicData = {
   registrations: Registration[];
   matches: Match[];
   prizes: Prize[];
+  groupPoints?: {
+    winPoints: number;
+    winWithoutGameLossPoints: number;
+    lossPoints: number;
+    lossWithGameWinPoints: number;
+    tiebreakerOrder?: unknown;
+  } | null;
 };
 
 type TabKey =
   | "info"
   | "participants"
-  | "times"
   | "groups"
+  | "standings"
+  | "bracket"
   | "fixture"
   | "results"
   | "prizes"
@@ -116,8 +136,9 @@ type TabKey =
 const TABS: { key: TabKey; label: string }[] = [
   { key: "info", label: "Info" },
   { key: "participants", label: "Participantes" },
-  { key: "times", label: "Tiempos" },
   { key: "groups", label: "Sembrado" },
+  { key: "standings", label: "Posiciones" },
+  { key: "bracket", label: "Brackets" },
   { key: "fixture", label: "Fixture" },
   { key: "results", label: "Resultados" },
   { key: "prizes", label: "Premios" },
@@ -147,6 +168,13 @@ const formatDateShort = (value?: string | null) => {
   });
 };
 
+const formatOrdinal = (value: number) => {
+  if (value === 1) return "1ro";
+  if (value === 2) return "2do";
+  if (value === 3) return "3ro";
+  return `${value}to`;
+};
+
 const formatMatchScore = (match: Match) => {
   if (!Array.isArray(match.games)) return null;
   const parts: string[] = [];
@@ -158,6 +186,29 @@ const formatMatchScore = (match: Match) => {
     parts.push(`${a}-${b}`);
   }
   return parts.length ? parts.join(" | ") : null;
+};
+
+const isMatchComplete = (match: Match) => {
+  const outcomeType = match.outcomeType ?? "PLAYED";
+  if (outcomeType !== "PLAYED") {
+    return Boolean(match.outcomeSide || match.winnerSide);
+  }
+  if (match.winnerSide) return true;
+  return Array.isArray(match.games) && match.games.length > 0;
+};
+
+const formatPlayoffRoundLabel = (bracketSize: number, roundNumber: number) => {
+  const roundSize = Math.max(
+    2,
+    Math.floor(bracketSize / Math.pow(2, roundNumber - 1))
+  );
+  if (roundSize === 2) return "Final";
+  if (roundSize === 4) return "Semifinal";
+  if (roundSize === 8) return "Cuartos";
+  if (roundSize === 16) return "Ronda de 16";
+  if (roundSize === 32) return "Ronda de 32";
+  if (roundSize === 64) return "Ronda de 64";
+  return `Ronda de ${roundSize}`;
 };
 
 const describePrizePlace = (placeFrom: number, placeTo?: number | null) => {
@@ -216,6 +267,43 @@ export default function TournamentPublic({
   const [tab, setTab] = useState<TabKey>("info");
   const [participantQuery, setParticipantQuery] = useState("");
   const [participantDraft, setParticipantDraft] = useState("");
+  const [matches, setMatches] = useState<Match[]>(tournament.matches);
+  const [matchesError, setMatchesError] = useState<string | null>(null);
+  const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const liveTabs: TabKey[] = ["fixture", "results", "bracket", "positions"];
+    if (!liveTabs.includes(tab)) return;
+    let active = true;
+
+    const loadMatches = async () => {
+      try {
+        const response = await fetch(
+          `/api/tournaments/${tournament.id}/public-matches`,
+          { cache: "no-store" }
+        );
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data?.error ?? "No se pudo actualizar el calendario");
+        }
+        if (!active) return;
+        setMatches(Array.isArray(data.matches) ? data.matches : []);
+        setMatchesError(null);
+      } catch (err) {
+        if (!active) return;
+        setMatchesError(
+          err instanceof Error ? err.message : "No se pudo actualizar el calendario"
+        );
+      }
+    };
+
+    void loadMatches();
+    const interval = window.setInterval(loadMatches, 10000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [tab, tournament.id]);
 
   const categoriesById = useMemo(() => {
     const map = new Map<string, Category>();
@@ -224,6 +312,35 @@ export default function TournamentPublic({
     });
     return map;
   }, [tournament.categories]);
+
+  const categoryDrawTypeById = useMemo(() => {
+    const map = new Map<string, string | null>();
+    tournament.categories.forEach((entry) => {
+      map.set(entry.categoryId, entry.drawType ?? null);
+    });
+    return map;
+  }, [tournament.categories]);
+
+  const groupStageCompleteByCategory = useMemo(() => {
+    const map = new Map<string, boolean>();
+    const groupMatchesByCategory = new Map<string, Match[]>();
+    matches
+      .filter((match) => match.stage === "GROUP")
+      .forEach((match) => {
+        if (!groupMatchesByCategory.has(match.categoryId)) {
+          groupMatchesByCategory.set(match.categoryId, []);
+        }
+        groupMatchesByCategory.get(match.categoryId)?.push(match);
+      });
+
+    groupMatchesByCategory.forEach((list, categoryId) => {
+      const allComplete =
+        list.length > 0 && list.every((match) => isMatchComplete(match));
+      map.set(categoryId, allComplete);
+    });
+
+    return map;
+  }, [matches]);
 
   const normalizedParticipantQuery = participantQuery.trim().toLowerCase();
 
@@ -260,6 +377,22 @@ export default function TournamentPublic({
     });
     return rows;
   }, [tournament.registrations, tournament.categories, categoriesById]);
+
+  const registrationById = useMemo(() => {
+    const map = new Map<string, Registration>();
+    tournament.registrations.forEach((registration) => {
+      map.set(registration.id, registration);
+    });
+    return map;
+  }, [tournament.registrations]);
+
+  const registrationMap = useMemo(() => {
+    const map = new Map<string, Registration>();
+    tournament.registrations.forEach((registration) => {
+      map.set(registration.id, registration);
+    });
+    return map;
+  }, [tournament.registrations]);
 
   const filteredParticipantRows = useMemo(() => {
     if (!normalizedParticipantQuery) return participantRows;
@@ -311,9 +444,173 @@ export default function TournamentPublic({
     });
   }, [tournament.registrations, categoriesById, tournament.categories]);
 
+  const standingsByCategory = useMemo(() => {
+    const data: TournamentRankingData = {
+      categories: tournament.categories.map((entry) => ({
+        categoryId: entry.categoryId,
+        drawType: undefined,
+      })),
+      registrations: tournament.registrations.map((registration) => ({
+        id: registration.id,
+        categoryId: registration.categoryId,
+        groupName: registration.groupName ?? null,
+        seed: null,
+        rankingNumber: registration.rankingNumber ?? null,
+        createdAt: registration.createdAt,
+        playerId: registration.playerId,
+        partnerId: registration.partnerId ?? null,
+        partnerTwoId: registration.partnerTwoId ?? null,
+      })),
+      matches: matches.map((match) => ({
+        categoryId: match.categoryId,
+        groupName: match.groupName ?? null,
+        stage: match.stage as TournamentRankingData["matches"][number]["stage"],
+        roundNumber: match.roundNumber ?? null,
+        games: match.games,
+        teamAId: match.teamAId ?? null,
+        teamBId: match.teamBId ?? null,
+        winnerSide: match.winnerSide as TournamentRankingData["matches"][number]["winnerSide"],
+        outcomeType: match.outcomeType as TournamentRankingData["matches"][number]["outcomeType"],
+        outcomeSide: match.outcomeSide as TournamentRankingData["matches"][number]["outcomeSide"],
+        isBronzeMatch: match.isBronzeMatch ?? null,
+      })),
+      groupPoints: tournament.groupPoints ?? null,
+      rankingPoints: [],
+    };
+    return computeTournamentStandingsByCategory(data);
+  }, [tournament.categories, tournament.registrations, matches, tournament.groupPoints]);
+
+  const labelByRegistration = useMemo(() => {
+    const map = new Map<string, string>();
+    standingsByCategory.forEach((entries) => {
+      const groupMap = new Map<string, typeof entries>();
+      entries.forEach((entry) => {
+        const groupKey = entry.groupName ?? "A";
+        const list = groupMap.get(groupKey) ?? [];
+        list.push(entry);
+        groupMap.set(groupKey, list);
+      });
+      groupMap.forEach((list, groupKey) => {
+        list.forEach((entry, index) => {
+          map.set(
+            entry.id,
+            `${formatOrdinal(index + 1)} Grupo ${groupKey}`
+          );
+        });
+      });
+    });
+    return map;
+  }, [standingsByCategory]);
+
+  const standingsByCategoryGroups = useMemo(() => {
+    const result: {
+      category: Category;
+      groups: { key: string; entries: ReturnType<typeof standingsByCategory.get>[number][] }[];
+    }[] = [];
+
+    standingsByCategory.forEach((entries, categoryId) => {
+      const category =
+        categoriesById.get(categoryId) ??
+        tournament.categories.find((entry) => entry.categoryId === categoryId)?.category;
+      if (!category) return;
+      const groupMap = new Map<string, typeof entries>();
+      entries.forEach((entry) => {
+        const groupKey = entry.groupName ?? "A";
+        const list = groupMap.get(groupKey) ?? [];
+        list.push(entry);
+        groupMap.set(groupKey, list);
+      });
+      const groups = Array.from(groupMap.entries()).map(([key, list]) => ({
+        key,
+        entries: list,
+      }));
+      groups.sort((a, b) => a.key.localeCompare(b.key));
+      result.push({ category, groups });
+    });
+
+    return result;
+  }, [standingsByCategory, categoriesById, tournament.categories]);
+
+  const playoffBrackets = useMemo(() => {
+    const map = new Map<string, { category: Category; matches: Match[] }>();
+    matches
+      .filter((match) => match.stage === "PLAYOFF" && !match.isBronzeMatch)
+      .forEach((match) => {
+        const category =
+          categoriesById.get(match.categoryId) ??
+          tournament.categories.find((entry) => entry.categoryId === match.categoryId)
+            ?.category;
+        if (!category) return;
+        const entry = map.get(match.categoryId) ?? { category, matches: [] };
+        entry.matches.push(match);
+        map.set(match.categoryId, entry);
+      });
+
+    return Array.from(map.values()).map((entry) => {
+      const drawType = categoryDrawTypeById.get(entry.category.id) ?? null;
+      const isWaiting =
+        drawType === "GROUPS_PLAYOFF" &&
+        !(groupStageCompleteByCategory.get(entry.category.id) ?? false);
+      const bracketMatches = isWaiting
+        ? entry.matches.map((match) => ({
+            ...match,
+            teamAId: null,
+            teamBId: null,
+            teamA: null,
+            teamB: null,
+          }))
+        : entry.matches;
+      const roundNumbers = Array.from(
+        new Set(
+          bracketMatches
+            .map((match) => match.roundNumber ?? 1)
+            .filter((round) => typeof round === "number")
+        )
+      ).sort((a, b) => a - b);
+      const firstRound = roundNumbers[0] ?? 1;
+      const firstRoundMatches = bracketMatches.filter(
+        (match) => (match.roundNumber ?? 1) === firstRound
+      );
+      const bracketSize =
+        firstRoundMatches.length > 0 ? firstRoundMatches.length * 2 : undefined;
+      const matchStatusByMatchId = new Map<string, string>();
+      bracketMatches.forEach((match) => {
+        const score = formatMatchScore(match);
+        if (score) {
+          matchStatusByMatchId.set(match.id, score);
+        }
+      });
+      return {
+        category: entry.category,
+        matches: bracketMatches,
+        roundNumbers,
+        bracketSize,
+        matchStatusByMatchId,
+      };
+    });
+  }, [matches, categoriesById, tournament.categories, categoryDrawTypeById, groupStageCompleteByCategory]);
+
+  const bracketSizeByCategory = useMemo(() => {
+    const map = new Map<string, number>();
+    playoffBrackets.forEach((entry) => {
+      if (entry.bracketSize) {
+        map.set(entry.category.id, entry.bracketSize);
+      }
+    });
+    return map;
+  }, [playoffBrackets]);
+
+  const playoffRoundsByCategory = useMemo(() => {
+    const map = new Map<string, number[]>();
+    playoffBrackets.forEach((entry) => {
+      map.set(entry.category.id, entry.roundNumbers);
+    });
+    return map;
+  }, [playoffBrackets]);
+
   const matchesByDate = useMemo(() => {
     const map = new Map<string, Match[]>();
-    tournament.matches.forEach((match) => {
+    matches.forEach((match) => {
       const dateKey = match.scheduledDate
         ? match.scheduledDate.split("T")[0]
         : "sin-fecha";
@@ -322,11 +619,11 @@ export default function TournamentPublic({
       map.set(dateKey, list);
     });
     return map;
-  }, [tournament.matches]);
+  }, [matches]);
 
   const resultMatches = useMemo(
     () =>
-      tournament.matches.filter((match) => {
+      matches.filter((match) => {
         const score = formatMatchScore(match);
         return Boolean(
           score ||
@@ -334,7 +631,7 @@ export default function TournamentPublic({
             (match.outcomeType && match.outcomeType !== "PLAYED")
         );
       }),
-    [tournament.matches]
+    [matches]
   );
 
   const prizesByCategory = useMemo(() => {
@@ -348,6 +645,37 @@ export default function TournamentPublic({
     });
     return Array.from(map.values());
   }, [tournament.prizes]);
+
+  const toggleTeamExpanded = (key: string) => {
+    setExpandedTeams((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const getTeamMembers = (registration?: Registration | null) => {
+    if (!registration) return [];
+    return [registration.player, registration.partner, registration.partnerTwo]
+      .filter(Boolean)
+      .map((player) => playerLabel(player as Player));
+  };
+
+  const getPlayoffLabel = (match: Match) => {
+    if (match.stage !== "PLAYOFF") return match.groupName ?? "-";
+    if (match.isBronzeMatch) return "Bronce";
+    const roundNumber = match.roundNumber ?? null;
+    const bracketSize = bracketSizeByCategory.get(match.categoryId) ?? null;
+    const roundNumbers = playoffRoundsByCategory.get(match.categoryId) ?? null;
+    if (!roundNumber || !bracketSize || !roundNumbers) return "Playoff";
+    const roundIndex = roundNumbers.indexOf(roundNumber);
+    const normalizedRound = roundIndex >= 0 ? roundIndex + 1 : roundNumber;
+    return formatPlayoffRoundLabel(bracketSize, normalizedRound);
+  };
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
@@ -449,52 +777,95 @@ export default function TournamentPublic({
         </div>
 
         {tab === "info" && (
-          <section className="mt-8 grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-              <h2 className="text-lg font-semibold text-white">Reglas</h2>
-              {tournament.rulesText ? (
-                <div
-                  className="prose prose-invert mt-4 max-w-none text-sm"
-                  dangerouslySetInnerHTML={{ __html: tournament.rulesText }}
-                />
-              ) : (
-                <p className="mt-4 text-sm text-slate-300">
-                  Sin reglas publicadas.
-                </p>
-              )}
-            </div>
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-              <h2 className="text-lg font-semibold text-white">
-                Categorias disponibles
-              </h2>
-              <div className="mt-4 space-y-3 text-sm">
-                {tournament.categories.map((entry) => (
+          <section className="mt-8">
+            <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
+              <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+                <h2 className="text-lg font-semibold text-white">Reglas</h2>
+                {tournament.rulesText ? (
                   <div
-                    key={entry.categoryId}
-                    className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/10 px-4 py-3"
-                  >
+                    className="prose prose-invert mt-4 max-w-none text-sm"
+                    dangerouslySetInnerHTML={{ __html: tournament.rulesText }}
+                  />
+                ) : (
+                  <p className="mt-4 text-sm text-slate-300">
+                    Sin reglas publicadas.
+                  </p>
+                )}
+              </div>
+              <div className="space-y-6">
+                <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+                  <h2 className="text-lg font-semibold text-white">Fechas clave</h2>
+                  <div className="mt-4 space-y-3 text-sm text-slate-300">
+                    <p>Inicio: {formatDateLong(tournament.startDate)}</p>
+                    <p>Fin: {formatDateLong(tournament.endDate)}</p>
+                    <p>
+                      Cierre inscripciones: {formatDateLong(tournament.registrationDeadline)}
+                    </p>
                     <div>
-                      <p className="font-semibold text-white">
-                        {entry.category.name}
-                      </p>
-                      <p className="text-xs text-slate-300">
-                        {entry.category.abbreviation} ·{" "}
-                        {entry.category.sport?.name ?? "N/D"}
-                      </p>
-                    </div>
-                    <div className="text-right text-xs text-slate-300">
-                      <p>Precio 1: Bs {entry.price}</p>
-                      <p>Precio 2+: Bs {entry.secondaryPrice || entry.price}</p>
-                      <p>Precio hermano: Bs {entry.siblingPrice || entry.price}</p>
+                      <p className="mt-4 font-semibold text-white">Dias de juego</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {tournament.playDays.map((day) => (
+                          <span
+                            key={day}
+                            className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs text-slate-200"
+                          >
+                            {formatDateShort(day)}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                ))}
+                </div>
+                <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+                  <h2 className="text-lg font-semibold text-white">Sedes</h2>
+                  <div className="mt-4 space-y-3 text-sm text-slate-300">
+                    {tournament.clubs.map((club) => (
+                      <div
+                        key={club.id}
+                        className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3"
+                      >
+                        <p className="font-semibold text-white">{club.name}</p>
+                        <p>{club.address ?? "Sin direccion"}</p>
+                        <p className="text-xs text-slate-300">
+                          Canchas habilitadas: {club.courtsCount ?? 1}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+                  <h2 className="text-lg font-semibold text-white">
+                    Categorias disponibles
+                  </h2>
+                  <div className="mt-4 space-y-3 text-sm">
+                    {tournament.categories.map((entry) => (
+                      <div
+                        key={entry.categoryId}
+                        className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div>
+                          <p className="font-semibold text-white">
+                            {entry.category.name}
+                          </p>
+                          <p className="text-xs text-slate-300">
+                            {entry.category.abbreviation} - {entry.category.sport?.name ?? "N/D"}
+                          </p>
+                        </div>
+                        <div className="text-xs text-slate-300">
+                          <p>Precio 1: Bs {entry.price}</p>
+                          <p>Precio 2+: Bs {entry.secondaryPrice || entry.price}</p>
+                          <p>Precio hermano: Bs {entry.siblingPrice || entry.price}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           </section>
         )}
 
-        {tab === "participants" && (
+{tab === "participants" && (
           <section className="mt-8 space-y-6">
             <div className="flex flex-wrap items-center gap-3 rounded-3xl border border-white/10 bg-white/5 p-5">
               <div className="flex-1">
@@ -586,52 +957,6 @@ export default function TournamentPublic({
           </section>
         )}
 
-        {tab === "times" && (
-          <section className="mt-8 grid gap-6 lg:grid-cols-[1.1fr_1fr]">
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-              <h2 className="text-lg font-semibold text-white">Fechas clave</h2>
-              <div className="mt-4 space-y-3 text-sm text-slate-300">
-                <p>Inicio: {formatDateLong(tournament.startDate)}</p>
-                <p>Fin: {formatDateLong(tournament.endDate)}</p>
-                <p>
-                  Cierre inscripciones:{" "}
-                  {formatDateLong(tournament.registrationDeadline)}
-                </p>
-                <div>
-                  <p className="mt-4 font-semibold text-white">Dias de juego</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {tournament.playDays.map((day) => (
-                      <span
-                        key={day}
-                        className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs text-slate-200"
-                      >
-                        {formatDateShort(day)}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-              <h2 className="text-lg font-semibold text-white">Sedes</h2>
-              <div className="mt-4 space-y-3 text-sm text-slate-300">
-                {tournament.clubs.map((club) => (
-                  <div
-                    key={club.id}
-                    className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3"
-                  >
-                    <p className="font-semibold text-white">{club.name}</p>
-                    <p>{club.address ?? "Sin direccion"}</p>
-                    <p className="text-xs text-slate-300">
-                      Canchas habilitadas: {club.courtsCount ?? 1}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-        )}
-
         {tab === "groups" && (
           <section className="mt-8 space-y-6">
             {groupSeedings.length === 0 ? (
@@ -700,6 +1025,11 @@ export default function TournamentPublic({
 
         {tab === "fixture" && (
           <section className="mt-8 space-y-6">
+            {matchesError && (
+              <p className="rounded-2xl border border-rose-400/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                {matchesError}
+              </p>
+            )}
             {Array.from(matchesByDate.entries()).map(([dateKey, matches]) => (
               <div
                 key={`fixture-${dateKey}`}
@@ -722,12 +1052,33 @@ export default function TournamentPublic({
                         <th className="px-3 py-2 text-left">Equipo 1</th>
                         <th className="px-3 py-2 text-left">VS</th>
                         <th className="px-3 py-2 text-left">Equipo 2</th>
+                        <th className="px-3 py-2 text-left">Marcador</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
                       {matches.map((match) => {
                         const category =
                           match.category ?? categoriesById.get(match.categoryId);
+                        const score = formatMatchScore(match);
+                        const isLive = Boolean(match.liveState?.isLive);
+                        const drawType =
+                          categoryDrawTypeById.get(match.categoryId) ?? null;
+                        const isPlayoffWaiting =
+                          match.stage === "PLAYOFF" &&
+                          drawType === "GROUPS_PLAYOFF" &&
+                          !(groupStageCompleteByCategory.get(match.categoryId) ?? false);
+                        const teamAKey = `${match.id}-A`;
+                        const teamBKey = `${match.id}-B`;
+                        const teamAMembers = getTeamMembers(match.teamA);
+                        const teamBMembers = getTeamMembers(match.teamB);
+                        const canExpandTeamA =
+                          teamAMembers.length > 1 ||
+                          (teamAMembers.length > 0 && Boolean(match.teamA?.teamName));
+                        const canExpandTeamB =
+                          teamBMembers.length > 1 ||
+                          (teamBMembers.length > 0 && Boolean(match.teamB?.teamName));
+                        const isTeamAExpanded = expandedTeams.has(teamAKey);
+                        const isTeamBExpanded = expandedTeams.has(teamBKey);
                         return (
                           <tr key={match.id} className="bg-white/5">
                             <td className="px-3 py-2">
@@ -743,18 +1094,82 @@ export default function TournamentPublic({
                               {category?.abbreviation ?? "N/D"}
                             </td>
                             <td className="px-3 py-2">
-                              {match.stage === "PLAYOFF"
-                                ? match.isBronzeMatch
-                                  ? "Bronce"
-                                  : "Playoff"
-                                : match.groupName ?? "-"}
+                              {getPlayoffLabel(match)}
                             </td>
                             <td className="px-3 py-2 font-semibold text-white">
-                              {teamLabel(match.teamA)}
+                              {isPlayoffWaiting ? (
+                                <span className="text-xs text-slate-400">
+                                  Por definir
+                                </span>
+                              ) : (
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span>{teamLabel(match.teamA)}</span>
+                                    {canExpandTeamA && (
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleTeamExpanded(teamAKey)}
+                                        className="text-[10px] font-semibold text-cyan-200"
+                                        aria-label={
+                                          isTeamAExpanded
+                                            ? "Ocultar jugadores"
+                                            : "Ver jugadores"
+                                        }
+                                      >
+                                        {isTeamAExpanded ? "v" : ">"}
+                                      </button>
+                                    )}
+                                  </div>
+                                  {canExpandTeamA && isTeamAExpanded && (
+                                    <div className="mt-1 text-[11px] text-slate-300">
+                                      {teamAMembers.join(" / ")}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </td>
                             <td className="px-3 py-2 text-slate-400">vs</td>
                             <td className="px-3 py-2 font-semibold text-white">
-                              {teamLabel(match.teamB)}
+                              {isPlayoffWaiting ? (
+                                <span className="text-xs text-slate-400">
+                                  Por definir
+                                </span>
+                              ) : (
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span>{teamLabel(match.teamB)}</span>
+                                    {canExpandTeamB && (
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleTeamExpanded(teamBKey)}
+                                        className="text-[10px] font-semibold text-cyan-200"
+                                        aria-label={
+                                          isTeamBExpanded
+                                            ? "Ocultar jugadores"
+                                            : "Ver jugadores"
+                                        }
+                                      >
+                                        {isTeamBExpanded ? "v" : ">"}
+                                      </button>
+                                    )}
+                                  </div>
+                                  {canExpandTeamB && isTeamBExpanded && (
+                                    <div className="mt-1 text-[11px] text-slate-300">
+                                      {teamBMembers.join(" / ")}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-slate-300">
+                              <div className="flex items-center gap-2">
+                                {score ?? "-"}
+                                {isLive && (
+                                  <span className="rounded-full bg-rose-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-200">
+                                    En vivo
+                                  </span>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -767,8 +1182,173 @@ export default function TournamentPublic({
           </section>
         )}
 
+        {tab === "standings" && (
+          <section className="mt-8 space-y-6">
+            {standingsByCategoryGroups.length === 0 ? (
+              <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-sm text-slate-300">
+                No hay tabla de posiciones disponible.
+              </div>
+            ) : (
+              standingsByCategoryGroups.map((entry) => (
+                <div
+                  key={`standings-${entry.category.id}`}
+                  className="rounded-3xl border border-white/10 bg-white/5 p-6"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-lg font-semibold text-white">
+                        {entry.category.name}
+                      </h3>
+                      <p className="text-xs text-slate-300">
+                        {entry.category.abbreviation}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    {entry.groups.map((group) => (
+                      <div
+                        key={`standings-${entry.category.id}-${group.key}`}
+                        className="overflow-hidden rounded-2xl border border-white/10 bg-white/10"
+                      >
+                        <div className="bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">
+                          Grupo {group.key}
+                        </div>
+                        <table className="min-w-full text-[11px] text-slate-200">
+                          <thead className="bg-white/5 uppercase tracking-[0.2em] text-slate-300">
+                            <tr>
+                              <th className="px-3 py-2 text-left">Pos</th>
+                              <th className="px-3 py-2 text-left">Jugador/Equipo</th>
+                              <th className="px-3 py-2 text-left">PJ</th>
+                              <th className="px-3 py-2 text-left">PG</th>
+                              <th className="px-3 py-2 text-left">PP</th>
+                              <th className="px-3 py-2 text-left">Sets</th>
+                              <th className="px-3 py-2 text-left">DS</th>
+                              <th className="px-3 py-2 text-left">PF</th>
+                              <th className="px-3 py-2 text-left">PC</th>
+                              <th className="px-3 py-2 text-left">DP</th>
+                              <th className="px-3 py-2 text-left">Pts</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/5">
+                            {group.entries.map((entryItem, index) => {
+                              const registration = registrationById.get(entryItem.id);
+                              const setsDiff =
+                                entryItem.setsWon - entryItem.setsLost;
+                              const pointsDiff =
+                                entryItem.pointsWon - entryItem.pointsLost;
+                              return (
+                                <tr key={entryItem.id}>
+                                  <td className="px-3 py-2 text-cyan-200">
+                                    {index + 1}
+                                  </td>
+                                  <td className="px-3 py-2 font-semibold text-white">
+                                    {registration ? teamLabel(registration) : "N/D"}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    {entryItem.matchesWon + entryItem.matchesLost}
+                                  </td>
+                                  <td className="px-3 py-2">{entryItem.matchesWon}</td>
+                                  <td className="px-3 py-2">{entryItem.matchesLost}</td>
+                                  <td className="px-3 py-2">
+                                    {entryItem.setsWon}-{entryItem.setsLost}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    {setsDiff}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    {entryItem.pointsWon}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    {entryItem.pointsLost}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    {pointsDiff}
+                                  </td>
+                                  <td className="px-3 py-2">{entryItem.points}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
+                  </div>
+                  {entry.groups.length === 1 && entry.groups[0].entries.length > 0 && (
+                    <div className="mt-5 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4 text-xs text-slate-200">
+                      <p className="text-[11px] uppercase tracking-[0.2em] text-cyan-200">
+                        Posiciones finales
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-3">
+                        {entry.groups[0].entries.slice(0, 3).map((item, idx) => {
+                          const reg = registrationById.get(item.id);
+                          const label = reg ? teamLabel(reg) : "N/D";
+                          return (
+                            <div
+                              key={`${item.id}-podium`}
+                              className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[11px]"
+                            >
+                              {idx + 1}º {label}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </section>
+        )}
+
+        {tab === "bracket" && (
+          <section className="mt-8 space-y-6">
+            {playoffBrackets.length === 0 ? (
+              <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-sm text-slate-300">
+                No hay llaves de playoff para mostrar.
+              </div>
+            ) : (
+              playoffBrackets.map((entry) => (
+                <div
+                  key={`bracket-${entry.category.id}`}
+                  className="rounded-3xl border border-white/10 bg-white/5 p-6"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-lg font-semibold text-white">
+                        {entry.category.name}
+                      </h3>
+                      <p className="text-xs text-slate-300">
+                        {entry.category.abbreviation}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <BracketCanvas
+                      categoryId={entry.category.id}
+                      matches={entry.matches}
+                      roundNumbers={entry.roundNumbers}
+                      bracketSize={entry.bracketSize}
+                      registrationMap={registrationMap}
+                      labelByRegistration={labelByRegistration}
+                      matchStatusByMatchId={entry.matchStatusByMatchId}
+                      className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-3"
+                      theme="dark"
+                      disableSwap
+                    />
+                  </div>
+                </div>
+              ))
+            )}
+          </section>
+        )}
+
         {tab === "results" && (
           <section className="mt-8 space-y-6">
+            {matchesError && (
+              <p className="rounded-2xl border border-rose-400/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                {matchesError}
+              </p>
+            )}
             {resultMatches.length === 0 ? (
               <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-sm text-slate-300">
                 Aun no hay resultados registrados.
@@ -778,6 +1358,7 @@ export default function TournamentPublic({
                 const category =
                   match.category ?? categoriesById.get(match.categoryId);
                 const score = formatMatchScore(match);
+                const isLive = Boolean(match.liveState?.isLive);
                 return (
                   <div
                     key={`result-${match.id}`}
@@ -788,11 +1369,18 @@ export default function TournamentPublic({
                         <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
                           {category?.name ?? "Categoria"}
                         </p>
-                        <p className="mt-2 text-base font-semibold text-white">
-                          {teamLabel(match.teamA)}{" "}
-                          <span className="text-slate-400">vs</span>{" "}
-                          {teamLabel(match.teamB)}
-                        </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-3 text-base font-semibold text-white">
+                          <span>
+                            {teamLabel(match.teamA)}{" "}
+                            <span className="text-slate-400">vs</span>{" "}
+                            {teamLabel(match.teamB)}
+                          </span>
+                          {isLive && (
+                            <span className="rounded-full bg-rose-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-200">
+                              En vivo
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div className="text-right text-xs text-slate-300">
                         <p>{match.startTime ?? "N/D"}</p>

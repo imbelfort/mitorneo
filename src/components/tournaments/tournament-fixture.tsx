@@ -873,7 +873,16 @@ export default function TournamentFixture({ tournamentId, tournamentName }: Prop
               )}
               {sessionRole !== "ADMIN" && (
                 <p className="text-xs text-amber-600">
-                  Solo el administrador general puede activar el torneo.
+                  Envia el Comprobante de Pago al Numero de Whatsapp{" "}
+                  <a
+                    href="https://wa.me/59160021284"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold text-amber-700 underline underline-offset-2"
+                  >
+                    +59160021284
+                  </a>
+                  .
                 </p>
               )}
               <p className="text-xs text-slate-500">

@@ -6,9 +6,9 @@ import { NextResponse } from "next/server";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { email, password, name } = body ?? {};
+    const { email, password, name, phone } = body ?? {};
 
-    if (!email || !password) {
+    if (!email || !password || !phone) {
       return NextResponse.json(
         { error: "Email y contraseña son requeridos" },
         { status: 400 }
@@ -40,6 +40,7 @@ export async function POST(request: Request) {
       data: {
         email,
         name: name ?? null,
+        phone: typeof phone === "string" ? phone : null,
         passwordHash,
         emailVerified: new Date(),
         role: Role.TOURNAMENT_ADMIN,
@@ -48,6 +49,7 @@ export async function POST(request: Request) {
         id: true,
         email: true,
         name: true,
+        phone: true,
         role: true,
       },
     });
@@ -61,3 +63,5 @@ export async function POST(request: Request) {
     );
   }
 }
+
+

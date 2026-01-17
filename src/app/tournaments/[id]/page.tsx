@@ -156,6 +156,15 @@ export default async function TournamentPublicPage({
           category: { select: { id: true, name: true, abbreviation: true } },
         },
       },
+      groupPoints: {
+        select: {
+          winPoints: true,
+          winWithoutGameLossPoints: true,
+          lossPoints: true,
+          lossWithGameWinPoints: true,
+          tiebreakerOrder: true,
+        },
+      },
     },
   });
 
@@ -190,19 +199,23 @@ export default async function TournamentPublicPage({
       price: entry.price.toString(),
       secondaryPrice: entry.secondaryPrice.toString(),
       siblingPrice: entry.siblingPrice.toString(),
+      drawType: entry.drawType,
       category: entry.category,
     })),
-    registrations: tournament.registrations.map((registration) => ({
-      id: registration.id,
-      categoryId: registration.categoryId,
-      teamName: registration.teamName,
-      groupName: registration.groupName,
-      rankingNumber: registration.rankingNumber,
-      player: registration.player,
-      partner: registration.partner,
-      partnerTwo: registration.partnerTwo,
-      createdAt: registration.createdAt.toISOString(),
-    })),
+      registrations: tournament.registrations.map((registration) => ({
+        id: registration.id,
+        categoryId: registration.categoryId,
+        playerId: registration.player.id,
+        partnerId: registration.partner?.id ?? null,
+        partnerTwoId: registration.partnerTwo?.id ?? null,
+        teamName: registration.teamName,
+        groupName: registration.groupName,
+        rankingNumber: registration.rankingNumber,
+        player: registration.player,
+        partner: registration.partner,
+        partnerTwo: registration.partnerTwo,
+        createdAt: registration.createdAt.toISOString(),
+      })),
     matches: tournament.matches.map((match) => ({
       id: match.id,
       categoryId: match.categoryId,
@@ -215,9 +228,12 @@ export default async function TournamentPublicPage({
       courtNumber: match.courtNumber,
       club: match.club,
       games: match.games,
+      liveState: match.liveState,
       winnerSide: match.winnerSide,
       outcomeType: match.outcomeType,
       outcomeSide: match.outcomeSide,
+      teamAId: match.teamAId,
+      teamBId: match.teamBId,
       category: match.category,
       teamA: match.teamA
         ? {
@@ -255,6 +271,15 @@ export default async function TournamentPublicPage({
       prizeText: prize.prizeText,
       category: prize.category,
     })),
+    groupPoints: tournament.groupPoints
+      ? {
+          winPoints: tournament.groupPoints.winPoints,
+          winWithoutGameLossPoints: tournament.groupPoints.winWithoutGameLossPoints,
+          lossPoints: tournament.groupPoints.lossPoints,
+          lossWithGameWinPoints: tournament.groupPoints.lossWithGameWinPoints,
+          tiebreakerOrder: tournament.groupPoints.tiebreakerOrder,
+        }
+      : null,
   };
 
   return <TournamentPublic tournament={normalized} />;

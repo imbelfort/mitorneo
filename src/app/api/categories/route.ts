@@ -24,9 +24,17 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const sportId = url.searchParams.get("sportId");
+  const scope = url.searchParams.get("scope");
+
+  const where = {
+    ...(sportId ? { sportId } : {}),
+    ...(scope === "own" && session.user.role === "TOURNAMENT_ADMIN"
+      ? { createdById: session.user.id }
+      : {}),
+  };
 
   const categories = await prisma.category.findMany({
-    where: sportId ? { sportId } : undefined,
+    where: Object.keys(where).length > 0 ? where : undefined,
     orderBy: [{ name: "asc" }],
     include: { sport: { select: { id: true, name: true } } },
   });
@@ -116,6 +124,7 @@ export async function POST(request: Request) {
   try {
     const category = await prisma.category.create({
       data: {
+        createdById: session.user.id,
         sportId: sport.id,
         name: name.trim(),
         abbreviation: abbreviation.trim(),

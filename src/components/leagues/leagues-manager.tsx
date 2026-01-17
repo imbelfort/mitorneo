@@ -187,6 +187,11 @@ export default function LeaguesManager({ initialLeagues, currentUserId, isAdmin 
       setError("Selecciona una liga");
       return;
     }
+    const targetLeague = leagues.find((league) => league.id === seasonForm.leagueId);
+    if (!targetLeague || !canManageLeague(targetLeague)) {
+      setError("Solo puedes crear temporadas para tus ligas");
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -333,8 +338,13 @@ export default function LeaguesManager({ initialLeagues, currentUserId, isAdmin 
             >
               <option value="">Selecciona liga</option>
               {leagues.map((league) => (
-                <option key={league.id} value={league.id}>
+                <option
+                  key={league.id}
+                  value={league.id}
+                  disabled={!canManageLeague(league)}
+                >
                   {league.name}
+                  {!canManageLeague(league) ? " (solo lectura)" : ""}
                 </option>
               ))}
             </select>

@@ -1,25 +1,30 @@
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-import PlayersManager from "@/components/players/players-manager";
+import UsersManager from "@/components/users/users-manager";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 
-export default async function PlayersAdminPage() {
+export default async function UsersAdminPage() {
   const session = await getServerSession(authOptions);
-  const hasSession = Boolean(session);
 
-  if (
-    !session ||
-    (session.user.role !== "ADMIN" && session.user.role !== "TOURNAMENT_ADMIN")
-  ) {
+  if (!session || session.user.role !== "ADMIN") {
     redirect("/");
   }
 
-  const players = await prisma.player.findMany({
-    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+  const users = await prisma.user.findMany({
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      role: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
 
   return (
@@ -39,38 +44,25 @@ export default async function PlayersAdminPage() {
         aria-hidden
         className="pointer-events-none absolute -top-24 right-[-120px] h-72 w-72 rounded-full bg-indigo-200/40 blur-3xl admin-glow"
       />
-      {hasSession && (
-        <div className="admin-fade-up absolute right-6 top-6 hidden items-center gap-2 rounded-full border border-slate-200/70 bg-white/80 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-400 shadow-sm sm:flex">
-          Sesion activa
-        </div>
-      )}
       <div className="relative mx-auto w-full max-w-5xl">
         <section className="admin-fade-up relative overflow-hidden rounded-[32px] bg-white/75 p-10 shadow-[0_35px_80px_-60px_rgba(15,23,42,0.5)] ring-1 ring-slate-200/70 backdrop-blur">
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-indigo-400/70 to-transparent" />
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-indigo-500/90">
-            Panel de administraciA3n
+            Panel de administracion
           </p>
           <h1 className="mt-3 text-4xl font-bold leading-tight text-slate-900">
             <span className="bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-600 bg-clip-text text-transparent">
-              Jugadores
+              Usuarios
             </span>
           </h1>
           <p className="mt-3 text-base text-slate-600">
-            AAñade jugadores rA­pidamente con solo nombre, apellido y documento.
-            Quedan en estado no confirmado hasta que valides sus datos.
+            Gestiona usuarios administradores, roles y contrasenas.
           </p>
           <div className="mt-10">
-            <PlayersManager
-              initialPlayers={players}
-              canConfirm={session.user.role === "ADMIN"}
-              scope="all"
-              currentUserId={session.user.id}
-              currentUserRole={session.user.role}
-            />
+            <UsersManager initialUsers={users} />
           </div>
         </section>
       </div>
     </main>
   );
 }
-

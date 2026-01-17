@@ -12,6 +12,7 @@ type Category = {
   name: string;
   abbreviation: string;
   sportId: string;
+  createdById?: string | null;
   modality?: "SINGLES" | "DOUBLES" | null;
   gender?: "MALE" | "FEMALE" | "MIXED" | null;
   sport?: Sport | null;
@@ -20,6 +21,9 @@ type Category = {
 type Props = {
   sports: Sport[];
   initialCategories: Category[];
+  canEdit?: boolean;
+  currentUserId?: string;
+  currentUserRole?: "ADMIN" | "TOURNAMENT_ADMIN" | string;
 };
 
 const sortCategories = (list: Category[], sportNameById: Map<string, string>) =>
@@ -31,7 +35,13 @@ const sortCategories = (list: Category[], sportNameById: Map<string, string>) =>
     return a.name.localeCompare(b.name);
   });
 
-export default function CategoriesManager({ sports, initialCategories }: Props) {
+export default function CategoriesManager({
+  sports,
+  initialCategories,
+  canEdit = true,
+  currentUserId,
+  currentUserRole,
+}: Props) {
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [form, setForm] = useState({
     sportId: sports[0]?.id ?? "",
@@ -44,6 +54,7 @@ export default function CategoriesManager({ sports, initialCategories }: Props) 
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [filterSportId, setFilterSportId] = useState<string>("all");
 
   const sportNameById = useMemo(
     () => new Map(sports.map((sport) => [sport.id, sport.name])),
@@ -144,6 +155,9 @@ export default function CategoriesManager({ sports, initialCategories }: Props) 
   };
 
   const startEditing = (category: Category) => {
+    if (!canEdit) {
+      return;
+    }
     const racquetball = isRacquetballName(
       category.sport?.name ?? sportNameById.get(category.sportId)
     );
@@ -166,10 +180,20 @@ export default function CategoriesManager({ sports, initialCategories }: Props) 
     setMessage(null);
   };
 
-  const sortedCategories = useMemo(
-    () => sortCategories(categories, sportNameById),
-    [categories, sportNameById]
-  );
+  const sortedCategories = useMemo(() => {
+    const list =
+      filterSportId === "all"
+        ? categories
+        : categories.filter((category) => category.sportId === filterSportId);
+    return sortCategories(list, sportNameById);
+  }, [categories, filterSportId, sportNameById]);
+
+  const canEditCategory = (category: Category) => {
+    if (!canEdit) return false;
+    if (currentUserRole === "ADMIN") return true;
+    if (!currentUserId) return false;
+    return category.createdById === currentUserId;
+  };
 
   const modalityLabel = (value?: Category["modality"]) => {
     if (value === "SINGLES") return "Singles";
@@ -186,136 +210,155 @@ export default function CategoriesManager({ sports, initialCategories }: Props) 
 
   return (
     <div className="space-y-8">
-      <div className="admin-fade-up relative overflow-hidden rounded-[28px] border border-white/70 bg-white/80 p-6 shadow-[0_24px_70px_-50px_rgba(15,23,42,0.35)] ring-1 ring-slate-200/70 backdrop-blur">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-indigo-300/70 via-sky-300/60 to-amber-200/70" />
-        <h2 className="text-2xl font-semibold text-slate-900">
-          {editingId ? "Editar categoria" : "Crear categoria"}
-        </h2>
-        <p className="text-sm text-slate-600">
-          {editingId
-            ? "Actualiza el nombre o la abreviacion de la categoria."
-            : "Define una categoria por deporte con nombre y abreviacion."}
-        </p>
+      {canEdit && (
+        <div className="admin-fade-up relative overflow-hidden rounded-[28px] border border-white/70 bg-white/80 p-6 shadow-[0_24px_70px_-50px_rgba(15,23,42,0.35)] ring-1 ring-slate-200/70 backdrop-blur">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-indigo-300/70 via-sky-300/60 to-amber-200/70" />
+          <h2 className="text-2xl font-semibold text-slate-900">
+            {editingId ? "Editar categoria" : "Crear categoria"}
+          </h2>
+          <p className="text-sm text-slate-600">
+            {editingId
+              ? "Actualiza el nombre o la abreviacion de la categoria."
+              : "Define una categoria por deporte con nombre y abreviacion."}
+          </p>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">Deporte</label>
-            <select
-              value={form.sportId}
-              onChange={(e) => handleSportChange(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-            >
-              <option value="">Selecciona deporte</option>
-              {sports.map((sport) => (
-                <option key={sport.id} value={sport.id}>
-                  {sport.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">Nombre</label>
-            <input
-              value={form.name}
-              onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-              placeholder="Ej. Primera"
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">Abreviacion</label>
-            <input
-              value={form.abbreviation}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, abbreviation: e.target.value }))
-              }
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-              placeholder="Ej. PRI"
-            />
-          </div>
-          {isRacquetballSelected && (
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Modalidad</label>
+              <label className="text-sm font-medium text-slate-700">Deporte</label>
               <select
-                value={form.modality}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setForm((prev) => ({
-                    ...prev,
-                    modality: value,
-                    gender:
-                      value === "SINGLES" && prev.gender === "MIXED"
-                        ? "MALE"
-                        : prev.gender || "MALE",
-                  }));
-                }}
+                value={form.sportId}
+                onChange={(e) => handleSportChange(e.target.value)}
                 className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
               >
-                <option value="">Selecciona modalidad</option>
-                <option value="SINGLES">Singles</option>
-                <option value="DOUBLES">Dobles</option>
+                <option value="">Selecciona deporte</option>
+                {sports.map((sport) => (
+                  <option key={sport.id} value={sport.id}>
+                    {sport.name}
+                  </option>
+                ))}
               </select>
             </div>
-          )}
-          {isRacquetballSelected && (
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Genero</label>
-              <select
-                value={form.gender}
+              <label className="text-sm font-medium text-slate-700">Nombre</label>
+              <input
+                value={form.name}
+                onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                placeholder="Ej. Primera"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Abreviacion</label>
+              <input
+                value={form.abbreviation}
                 onChange={(e) =>
-                  setForm((prev) => ({ ...prev, gender: e.target.value }))
+                  setForm((prev) => ({ ...prev, abbreviation: e.target.value }))
                 }
                 className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-              >
-                <option value="">Selecciona genero</option>
-                <option value="MALE">Varones</option>
-                <option value="FEMALE">Mujeres</option>
-                {form.modality === "DOUBLES" && <option value="MIXED">Mixto</option>}
-              </select>
+                placeholder="Ej. PRI"
+              />
             </div>
-          )}
-        </div>
+            {isRacquetballSelected && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Modalidad</label>
+                <select
+                  value={form.modality}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setForm((prev) => ({
+                      ...prev,
+                      modality: value,
+                      gender:
+                        value === "SINGLES" && prev.gender === "MIXED"
+                          ? "MALE"
+                          : prev.gender || "MALE",
+                    }));
+                  }}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                >
+                  <option value="">Selecciona modalidad</option>
+                  <option value="SINGLES">Singles</option>
+                  <option value="DOUBLES">Dobles</option>
+                </select>
+              </div>
+            )}
+            {isRacquetballSelected && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Genero</label>
+                <select
+                  value={form.gender}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, gender: e.target.value }))
+                  }
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                >
+                  <option value="">Selecciona genero</option>
+                  <option value="MALE">Varones</option>
+                  <option value="FEMALE">Mujeres</option>
+                  {form.modality === "DOUBLES" && <option value="MIXED">Mixto</option>}
+                </select>
+              </div>
+            )}
+          </div>
 
-        <div className="mt-6 flex justify-end">
-          {editingId && (
+          <div className="mt-6 flex justify-end">
+            {editingId && (
+              <button
+                type="button"
+                onClick={cancelEditing}
+                className="mr-3 inline-flex items-center justify-center rounded-full border border-slate-200 bg-white/80 px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-white"
+              >
+                Cancelar
+              </button>
+            )}
             <button
               type="button"
-              onClick={cancelEditing}
-              className="mr-3 inline-flex items-center justify-center rounded-full border border-slate-200 bg-white/80 px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-white"
+              onClick={saveCategory}
+              disabled={
+                loading ||
+                !form.sportId ||
+                form.name.trim().length < 2 ||
+                form.abbreviation.trim().length < 1 ||
+                (isRacquetballSelected && (!form.modality || !form.gender))
+              }
+              className="inline-flex items-center justify-center rounded-full bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-[0_18px_40px_-22px_rgba(79,70,229,0.5)] transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              Cancelar
+              {loading
+                ? "Guardando..."
+                : editingId
+                ? "Guardar cambios"
+                : "Crear categoria"}
             </button>
-          )}
-          <button
-            type="button"
-            onClick={saveCategory}
-            disabled={
-              loading ||
-              !form.sportId ||
-              form.name.trim().length < 2 ||
-              form.abbreviation.trim().length < 1 ||
-              (isRacquetballSelected && (!form.modality || !form.gender))
-            }
-            className="inline-flex items-center justify-center rounded-full bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-[0_18px_40px_-22px_rgba(79,70,229,0.5)] transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            {loading
-              ? "Guardando..."
-              : editingId
-              ? "Guardar cambios"
-              : "Crear categoria"}
-          </button>
-        </div>
+          </div>
 
-        {sports.length === 0 && (
-          <p className="mt-3 text-sm text-slate-500">
-            Primero crea un deporte para poder registrar categorias.
-          </p>
-        )}
-      </div>
+          {sports.length === 0 && (
+            <p className="mt-3 text-sm text-slate-500">
+              Primero crea un deporte para poder registrar categorias.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="admin-fade-up relative overflow-hidden rounded-[24px] border border-white/70 bg-white/80 p-6 shadow-[0_20px_60px_-45px_rgba(15,23,42,0.35)] ring-1 ring-slate-200/70 backdrop-blur">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-slate-200/80 via-indigo-200/60 to-slate-200/80" />
         <h3 className="text-lg font-semibold text-slate-900">Categorias registradas</h3>
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-slate-600">
+          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+            Filtrar por deporte
+          </span>
+          <select
+            value={filterSportId}
+            onChange={(e) => setFilterSportId(e.target.value)}
+            className="rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-600 shadow-sm transition hover:bg-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+          >
+            <option value="all">Todos</option>
+            {sports.map((sport) => (
+              <option key={sport.id} value={sport.id}>
+                {sport.name}
+              </option>
+            ))}
+          </select>
+        </div>
         {sortedCategories.length === 0 ? (
           <p className="mt-2 text-sm text-slate-600">Aun no hay categorias.</p>
         ) : (
@@ -329,7 +372,9 @@ export default function CategoriesManager({ sports, initialCategories }: Props) 
                   <th className="px-3 py-3 text-left font-semibold">Modalidad</th>
                   <th className="px-3 py-3 text-left font-semibold">Genero</th>
                   <th className="px-3 py-3 text-left font-semibold">ID</th>
-                  <th className="px-3 py-3 text-right font-semibold">Acciones</th>
+                  {canEdit && (
+                    <th className="px-3 py-3 text-right font-semibold">Acciones</th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -355,15 +400,23 @@ export default function CategoriesManager({ sports, initialCategories }: Props) 
                     <td className="px-3 py-2 text-xs text-slate-500">
                       {category.id}
                     </td>
-                    <td className="px-3 py-2 text-right">
-                      <button
-                        type="button"
-                        onClick={() => startEditing(category)}
-                        className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-white"
-                      >
-                        Editar
-                      </button>
-                    </td>
+                    {canEdit && (
+                      <td className="px-3 py-2 text-right">
+                        {canEditCategory(category) ? (
+                          <button
+                            type="button"
+                            onClick={() => startEditing(category)}
+                            className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-white"
+                          >
+                            Editar
+                          </button>
+                        ) : (
+                          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                            Solo lectura
+                          </span>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -375,7 +428,7 @@ export default function CategoriesManager({ sports, initialCategories }: Props) 
       {error && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
       )}
-      {message && (
+      {canEdit && message && (
         <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
           {message}
         </p>

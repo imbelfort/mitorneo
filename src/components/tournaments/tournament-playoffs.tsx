@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-
-type CreateBracketFn = typeof import("bracketry")["createBracket"];
+import { useEffect, useMemo, useState } from "react";
+import { BracketCanvas } from "@/components/tournaments/bracket-canvas";
 
 type DrawType = "ROUND_ROBIN" | "GROUPS_PLAYOFF" | "PLAYOFF";
 type MatchStage = "GROUP" | "PLAYOFF";
@@ -111,23 +110,6 @@ const DEFAULT_TIEBREAKERS: Tiebreaker[] = [
   "POINTS_DIFF",
 ];
 
-const formatTeamName = (registration?: Registration) => {
-  if (!registration) return "N/D";
-  const teamName = registration.teamName?.trim();
-  const players = [
-    registration.player,
-    registration.partner,
-    registration.partnerTwo,
-  ].filter(Boolean) as Player[];
-  const playersLabel = players
-    .map((player) => `${player.firstName} ${player.lastName}`.trim())
-    .join(" / ");
-  if (teamName) {
-    return playersLabel ? `${teamName} (${playersLabel})` : teamName;
-  }
-  return playersLabel || "N/D";
-};
-
 const formatOrdinal = (value: number) => {
   if (value === 1) return "1ro";
   if (value === 2) return "2do";
@@ -221,452 +203,6 @@ const formatPlayoffRoundLabel = (roundSize: number, roundNumber: number) => {
   if (roundSize === 64) return "Ronda de 64";
   if (roundSize > 1) return `Ronda de ${roundSize}`;
   return `Ronda ${roundNumber}`;
-};
-
-type BracketContestant = {
-  players: { title: string }[];
-  entryStatus?: string;
-};
-
-type BracketSide = {
-  contestantId?: string;
-  isWinner?: boolean;
-  title?: string;
-};
-
-type BracketMatchEntry = {
-  roundIndex: number;
-  order: number;
-  sides: BracketSide[];
-  matchStatus?: string;
-  matchId?: string;
-};
-
-type BracketBuildParams = {
-  categoryId: string;
-  bracketSize?: number;
-  matches: Match[];
-  roundNumbers: number[];
-  roundLabelMap?: Map<number, string>;
-  registrationMap: Map<string, Registration>;
-  labelByRegistration: Map<string, string>;
-};
-
-const buildBracketData = ({
-  categoryId,
-  bracketSize,
-  matches,
-  roundNumbers,
-  roundLabelMap,
-  registrationMap,
-  labelByRegistration,
-}: BracketBuildParams) => {
-  const contestants: Record<string, BracketContestant> = {};
-  const ensureRegistrationContestant = (id: string) => {
-    if (contestants[id]) return;
-    const registration = registrationMap.get(id);
-    const title =
-      formatTeamName(registration) ||
-      (registration ? "Equipo" : "Participante sin datos");
-    contestants[id] = {
-      players: [{ title }],
-      entryStatus: labelByRegistration.get(id) ?? undefined,
-    };
-  };
-  const ensurePlaceholderContestant = (id: string, title: string) => {
-    if (contestants[id]) return;
-    contestants[id] = {
-      players: [{ title }],
-    };
-  };
-  matches.forEach((match) => {
-    if (match.teamAId) ensureRegistrationContestant(match.teamAId);
-    if (match.teamBId) ensureRegistrationContestant(match.teamBId);
-  });
-
-  const normalizedRoundNumbers =
-    roundNumbers.length > 0 ? roundNumbers : [matches[0]?.roundNumber ?? 1];
-  const roundIndexMap = new Map<number, number>();
-  normalizedRoundNumbers.forEach((roundNumber, index) => {
-    roundIndexMap.set(roundNumber, index);
-  });
-
-  const rounds = normalizedRoundNumbers.map((roundNumber, index) => {
-    const roundSize =
-      typeof bracketSize === "number"
-        ? Math.max(2, Math.round(bracketSize / 2 ** index) || 2)
-        : 2;
-    return {
-      name:
-        roundLabelMap?.get(roundNumber) ??
-        formatPlayoffRoundLabel(roundSize, roundNumber),
-    };
-  });
-
-  const orderTracker = new Map<number, number>();
-  const bracketMatches: BracketMatchEntry[] = matches
-    .slice()
-    .sort((a, b) => {
-      const roundA =
-        roundIndexMap.get(a.roundNumber ?? normalizedRoundNumbers[0]) ?? 0;
-      const roundB =
-        roundIndexMap.get(b.roundNumber ?? normalizedRoundNumbers[0]) ?? 0;
-      if (roundA !== roundB) return roundA - roundB;
-      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return timeA - timeB;
-    })
-    .map((match) => {
-      const roundNumber = match.roundNumber ?? normalizedRoundNumbers[0];
-      const roundIndex = roundIndexMap.get(roundNumber) ?? 0;
-      const nextOrder = orderTracker.get(roundNumber) ?? 0;
-      orderTracker.set(roundNumber, nextOrder + 1);
-      const winnerSide = match.winnerSide ?? null;
-
-      const buildSide = (
-        teamId: string | null | undefined,
-        sideIndex: 0 | 1,
-        roundIndexValue: number,
-        hasOpponent: boolean
-      ): BracketSide => {
-        if (teamId) {
-          return {
-            contestantId: teamId,
-            isWinner:
-              winnerSide === (sideIndex === 0 ? "A" : "B") ? true : undefined,
-          };
-        }
-        if (roundIndexValue === 0) {
-          if (hasOpponent) {
-            const byeId = `bye-${categoryId}-${match.id}-${sideIndex}`;
-            ensurePlaceholderContestant(byeId, "Bye");
-            return { contestantId: byeId };
-          }
-          const emptyId = `empty-${categoryId}-${match.id}-${sideIndex}`;
-          ensurePlaceholderContestant(emptyId, "Disponible");
-          return { contestantId: emptyId };
-        }
-        const pendingId = `pending-${categoryId}-${match.id}-${sideIndex}`;
-        ensurePlaceholderContestant(pendingId, "Por definir");
-        return { contestantId: pendingId };
-      };
-
-      const hasTeamA = Boolean(match.teamAId);
-      const hasTeamB = Boolean(match.teamBId);
-
-      return {
-        roundIndex,
-        order: nextOrder,
-        sides: [
-          buildSide(match.teamAId, 0, roundIndex, hasTeamB),
-          buildSide(match.teamBId, 1, roundIndex, hasTeamA),
-        ],
-        matchStatus: roundLabelMap?.get(roundNumber),
-        matchId: match.id,
-      };
-    });
-
-  return {
-    contestants,
-    rounds,
-    matches: bracketMatches,
-  };
-};
-
-type BracketCanvasProps = {
-  categoryId: string;
-  matches: Match[];
-  roundNumbers: number[];
-  roundLabelMap?: Map<number, string>;
-  bracketSize?: number;
-  registrationMap: Map<string, Registration>;
-  labelByRegistration: Map<string, string>;
-  onSwapSides?: (
-    from: { matchId: string; side: "A" | "B" },
-    to: { matchId: string; side: "A" | "B" }
-  ) => Promise<void>;
-  disableSwap?: boolean;
-};
-
-type DragInfo = {
-  matchId: string;
-  side: "A" | "B";
-  contestantId: string | null;
-  roundIndex: number;
-  order: number;
-};
-
-type BracketInstance = ReturnType<CreateBracketFn>;
-
-const bracketOptions = {
-  width: "100%",
-  height: "420px",
-  rootBorderColor: "transparent",
-  wrapperBorderColor: "transparent",
-  rootBgColor: "transparent",
-  matchTextColor: "#0f172a",
-  connectionLinesColor: "rgba(79,70,229,0.35)",
-  highlightedConnectionLinesColor: "#6366f1",
-  matchStatusBgColor: "#eef2ff",
-  verticalScrollMode: "native" as const,
-  navButtonsPosition: "hidden" as const,
-  rootFontFamily: "Inter, system-ui, sans-serif",
-  matchFontSize: 12,
-  distanceBetweenScorePairs: 6,
-  matchMinVerticalGap: 18,
-  matchHorMargin: 12,
-};
-
-const BracketCanvas = ({
-  categoryId,
-  matches,
-  roundNumbers,
-  roundLabelMap,
-  bracketSize,
-  registrationMap,
-  labelByRegistration,
-  onSwapSides,
-  disableSwap,
-}: BracketCanvasProps) => {
-  const wrapperRef = useRef<HTMLDivElement | null>(null);
-  const bracketRef = useRef<BracketInstance | null>(null);
-  const createBracketRef = useRef<CreateBracketFn | null>(null);
-  const data = useMemo(
-    () =>
-      buildBracketData({
-        categoryId,
-        bracketSize,
-        matches,
-        roundNumbers,
-        roundLabelMap,
-        registrationMap,
-        labelByRegistration,
-      }),
-    [
-      categoryId,
-      bracketSize,
-      matches,
-      roundNumbers,
-      roundLabelMap,
-      registrationMap,
-      labelByRegistration,
-    ]
-  );
-  const matchKeyToId = useMemo(() => {
-    const map = new Map<string, string>();
-    data.matches.forEach((match) => {
-      if (match.matchId) {
-        map.set(`${match.roundIndex}:${match.order}`, match.matchId);
-      }
-    });
-    return map;
-  }, [data.matches]);
-  const dragInfoRef = useRef<DragInfo | null>(null);
-  const swapInFlightRef = useRef(false);
-  const syncDraggable = () => {
-    const wrapper = wrapperRef.current;
-    if (!wrapper) return;
-    const canSwap = Boolean(onSwapSides) && !disableSwap;
-    const scroller = wrapper.querySelector<HTMLElement>(".matches-scroller");
-    if (scroller) {
-      scroller.style.pointerEvents = "auto";
-    }
-    const sideElements = wrapper.querySelectorAll<HTMLElement>(".side-wrapper");
-    sideElements.forEach((side) => {
-      const contestantId = side.getAttribute("contestant-id");
-      const isPlaceholder =
-        contestantId?.startsWith("bye-") ||
-        contestantId?.startsWith("empty-") ||
-        contestantId?.startsWith("pending-");
-      const isDraggable = canSwap && Boolean(contestantId) && !isPlaceholder;
-      side.style.pointerEvents = "auto";
-      side.style.cursor = isDraggable ? "grab" : "default";
-      side.setAttribute("draggable", isDraggable ? "true" : "false");
-      side
-        .querySelectorAll<HTMLElement>(
-          ".players-info, .player-wrapper, .player-title"
-        )
-        .forEach((child) => {
-          child.setAttribute("draggable", isDraggable ? "true" : "false");
-        });
-    });
-  };
-
-  useEffect(() => {
-    let active = true;
-    const install = async () => {
-      if (data.matches.length === 0) {
-        bracketRef.current?.uninstall();
-        bracketRef.current = null;
-        return;
-      }
-      if (!wrapperRef.current) return;
-      if (!createBracketRef.current) {
-        const bracketryModule = await import("bracketry");
-        if (!active) return;
-        createBracketRef.current = bracketryModule.createBracket;
-      }
-      const createBracket = createBracketRef.current;
-      if (!createBracket) return;
-      if (bracketRef.current) {
-        bracketRef.current.replaceData(data);
-      } else {
-        bracketRef.current = createBracket(
-          data,
-          wrapperRef.current,
-          bracketOptions
-        );
-      }
-      requestAnimationFrame(() => {
-        syncDraggable();
-      });
-    };
-    void install();
-    return () => {
-      active = false;
-    };
-  }, [data]);
-
-  useEffect(() => {
-    syncDraggable();
-    const wrapper = wrapperRef.current;
-    if (!wrapper) return;
-    const observer = new MutationObserver(() => {
-      syncDraggable();
-    });
-    observer.observe(wrapper, { childList: true, subtree: true });
-    return () => {
-      observer.disconnect();
-    };
-  }, [data, onSwapSides, disableSwap]);
-
-  useEffect(() => {
-    const wrapper = wrapperRef.current;
-    if (!wrapper || !onSwapSides) return;
-    if (disableSwap) return;
-
-    const getSideInfo = (element: HTMLElement): DragInfo | null => {
-      const matchElement = element.closest(".match-wrapper");
-      const roundElement = element.closest(".round-wrapper");
-      if (!matchElement || !roundElement) return null;
-      const roundIndex = roundElement.getAttribute("round-index");
-      const order = matchElement.getAttribute("match-order");
-      if (!roundIndex || !order) return null;
-      const matchId = matchKeyToId.get(`${roundIndex}:${order}`);
-      if (!matchId) return null;
-      const parent = element.parentElement;
-      const sideIndex = parent?.firstElementChild === element ? 0 : 1;
-      const contestantId = element.getAttribute("contestant-id");
-      return {
-        matchId,
-        side: sideIndex === 0 ? "A" : "B",
-        contestantId:
-          contestantId?.startsWith("bye-") ||
-          contestantId?.startsWith("empty-") ||
-          contestantId?.startsWith("pending-")
-            ? null
-            : contestantId,
-        roundIndex: Number(roundIndex),
-        order: Number(order),
-      };
-    };
-
-    const handleDragStart = (event: DragEvent) => {
-      const target = (event.target as HTMLElement | null)?.closest(
-        ".side-wrapper"
-      ) as HTMLElement | null;
-      if (!target) return;
-      const info = getSideInfo(target);
-      if (!info || !info.contestantId) return;
-      dragInfoRef.current = info;
-      event.dataTransfer?.setData(
-        "application/json",
-        JSON.stringify({ matchId: info.matchId, side: info.side })
-      );
-      event.dataTransfer?.setData("text/plain", info.matchId);
-      if (event.dataTransfer) {
-        event.dataTransfer.effectAllowed = "move";
-      }
-    };
-
-    const handleDragOver = (event: DragEvent) => {
-      if (!dragInfoRef.current) return;
-      const target = (event.target as HTMLElement | null)?.closest(
-        ".side-wrapper"
-      ) as HTMLElement | null;
-      if (!target) return;
-      const info = getSideInfo(target);
-      if (!info) return;
-      if (
-        info.matchId === dragInfoRef.current.matchId &&
-        info.side === dragInfoRef.current.side
-      ) {
-        return;
-      }
-      event.preventDefault();
-      if (event.dataTransfer) {
-        event.dataTransfer.dropEffect = "move";
-      }
-    };
-
-    const handleDrop = async (event: DragEvent) => {
-      const source = dragInfoRef.current;
-      dragInfoRef.current = null;
-      if (!source) return;
-      event.preventDefault();
-      const target = (event.target as HTMLElement | null)?.closest(
-        ".side-wrapper"
-      ) as HTMLElement | null;
-      if (!target) return;
-      const info = getSideInfo(target);
-      if (!info) return;
-      if (source.matchId === info.matchId && source.side === info.side) {
-        return;
-      }
-      if (swapInFlightRef.current) return;
-      swapInFlightRef.current = true;
-      try {
-        await onSwapSides(
-          { matchId: source.matchId, side: source.side },
-          { matchId: info.matchId, side: info.side }
-        );
-      } finally {
-        swapInFlightRef.current = false;
-      }
-    };
-
-    const handleDragEnd = () => {
-      dragInfoRef.current = null;
-    };
-
-    wrapper.addEventListener("dragstart", handleDragStart, true);
-    wrapper.addEventListener("dragover", handleDragOver, true);
-    wrapper.addEventListener("drop", handleDrop, true);
-    wrapper.addEventListener("dragend", handleDragEnd, true);
-    return () => {
-      wrapper.removeEventListener("dragstart", handleDragStart, true);
-      wrapper.removeEventListener("dragover", handleDragOver, true);
-      wrapper.removeEventListener("drop", handleDrop, true);
-      wrapper.removeEventListener("dragend", handleDragEnd, true);
-    };
-  }, [matchKeyToId, onSwapSides, disableSwap]);
-
-  useEffect(() => {
-    return () => {
-      bracketRef.current?.uninstall();
-      bracketRef.current = null;
-    };
-  }, []);
-
-  return (
-    <div className="flex min-h-[420px] w-full items-center justify-center">
-      <div
-        ref={wrapperRef}
-        className="w-full"
-        style={{ width: "100%", minHeight: "420px" }}
-      />
-    </div>
-  );
 };
 
 const nextPowerOfTwo = (value: number) => {
@@ -1090,10 +626,6 @@ export default function TournamentPlayoffs({
     setMessage("Llave actualizada");
   };
 
-  if (loading) {
-    return <p className="text-sm text-slate-500">Cargando llaves...</p>;
-  }
-
   const isMatchComplete = (match: Match) => {
     const outcomeType = match.outcomeType ?? "PLAYED";
     if (match.stage !== "GROUP" && (!match.teamAId || !match.teamBId)) {
@@ -1106,8 +638,29 @@ export default function TournamentPlayoffs({
     return Array.isArray(match.games) && match.games.length > 0;
   };
 
+  const groupStageCompleteByCategory = useMemo(() => {
+    const map = new Map<string, boolean>();
+    const matchesByCategory = new Map<string, Match[]>();
+    groupMatches.forEach((match) => {
+      if (!matchesByCategory.has(match.categoryId)) {
+        matchesByCategory.set(match.categoryId, []);
+      }
+      matchesByCategory.get(match.categoryId)?.push(match);
+    });
+    matchesByCategory.forEach((list, categoryId) => {
+      const allComplete =
+        list.length > 0 && list.every((match) => isMatchComplete(match));
+      map.set(categoryId, allComplete);
+    });
+    return map;
+  }, [groupMatches]);
+
   const allMatchesComplete =
     matches.length > 0 && matches.every((match) => isMatchComplete(match));
+
+  if (loading) {
+    return <p className="text-sm text-slate-500">Cargando llaves...</p>;
+  }
 
   const handleFinishTournament = async () => {
     if (finishing) return;
@@ -1199,11 +752,21 @@ export default function TournamentPlayoffs({
         playoffCategories.map((category) => {
           const categoryMatches =
             playoffMatchesByCategory.get(category.id) ?? [];
-          const mainMatches = categoryMatches.filter(
-            (match) => !match.isBronzeMatch && (match.teamAId || match.teamBId)
+          const waitingPlayoff =
+            category.drawType === "GROUPS_PLAYOFF" &&
+            !(groupStageCompleteByCategory.get(category.id) ?? false);
+          const displayMatches = waitingPlayoff
+            ? categoryMatches.map((match) => ({
+                ...match,
+                teamAId: null,
+                teamBId: null,
+              }))
+            : categoryMatches;
+          const mainMatches = displayMatches.filter(
+            (match) => !match.isBronzeMatch
           );
-          const bronzeMatches = categoryMatches.filter(
-            (match) => match.isBronzeMatch && (match.teamAId || match.teamBId)
+          const bronzeMatches = displayMatches.filter(
+            (match) => match.isBronzeMatch
           );
           const roundMap = new Map<number, Match[]>();
           mainMatches.forEach((match) => {

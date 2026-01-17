@@ -2,9 +2,20 @@
 
 /* eslint-disable @next/next/no-img-element */
 
+import { Manrope, Playfair_Display } from "next/font/google";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+
+const displayFont = Playfair_Display({
+  subsets: ["latin"],
+  weight: ["600", "700"],
+});
+
+const bodyFont = Manrope({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
 
 type Player = {
   id: string;
@@ -25,6 +36,8 @@ type PlayerStats = {
   matchesPlayed: number;
   matchesWon: number;
   matchesLost: number;
+  doubles: number;
+  triples: number;
 };
 
 type LeagueRanking = {
@@ -93,6 +106,8 @@ export default function PlayerProfilePage() {
     matchesPlayed: 0,
     matchesWon: 0,
     matchesLost: 0,
+    doubles: 0,
+    triples: 0,
   });
   const [error, setError] = useState<string | null>(null);
   const [rankings, setRankings] = useState<LeagueRanking[]>([]);
@@ -129,9 +144,17 @@ export default function PlayerProfilePage() {
           matchesPlayed: Number(data.stats.matchesPlayed ?? 0),
           matchesWon: Number(data.stats.matchesWon ?? 0),
           matchesLost: Number(data.stats.matchesLost ?? 0),
+          doubles: Number(data.stats.doubles ?? 0),
+          triples: Number(data.stats.triples ?? 0),
         });
       } else {
-        setStats({ matchesPlayed: 0, matchesWon: 0, matchesLost: 0 });
+        setStats({
+          matchesPlayed: 0,
+          matchesWon: 0,
+          matchesLost: 0,
+          doubles: 0,
+          triples: 0,
+        });
       }
       setState("ready");
     };
@@ -199,35 +222,64 @@ export default function PlayerProfilePage() {
   const age = calculateAge(dob);
   const genderLabel = genderCopy[player.gender] ?? player.gender;
   const statusLabel = statusCopy[player.status] ?? player.status;
+  const docLabel = player.documentType === "ID_CARD" ? "CI" : "Pasaporte";
+  const locationLabel =
+    [player.city, player.country].filter(Boolean).join(", ") || "Sin dato";
+  const statsCards = [
+    { label: "Partidos jugados", value: stats.matchesPlayed },
+    { label: "Partidos ganados", value: stats.matchesWon },
+    { label: "Partidos perdidos", value: stats.matchesLost },
+    { label: "Dobles (Fronton)", value: stats.doubles },
+    { label: "Triples (Fronton)", value: stats.triples },
+  ];
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-white to-slate-100 px-6 py-12">
-      <div className="w-full max-w-4xl rounded-3xl bg-white p-10 shadow-lg ring-1 ring-slate-200">
-        <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+    <main
+      className={`${bodyFont.className} relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-amber-50 via-white to-slate-50 px-6 py-14`}
+    >
+      <div className="pointer-events-none absolute left-1/2 top-0 h-72 w-72 -translate-x-1/2 rounded-full bg-amber-200/40 blur-[140px]" />
+      <div className="pointer-events-none absolute bottom-0 right-0 h-80 w-80 rounded-full bg-sky-200/40 blur-[160px]" />
+
+      <div className="w-full max-w-5xl rounded-[32px] border border-white/60 bg-white/80 p-10 shadow-[0_30px_60px_-45px_rgba(15,23,42,0.5)] backdrop-blur">
+        <div className="flex flex-wrap items-start justify-between gap-6">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.25em] text-indigo-600">
-              Perfil de jugador
+            <p className="text-xs font-semibold uppercase tracking-[0.45em] text-amber-600">
+              Jugador destacado
             </p>
-            <h1 className="mt-3 text-3xl font-bold text-slate-900">
+            <h1
+              className={`${displayFont.className} mt-3 text-4xl font-semibold text-slate-900`}
+            >
               {player.firstName} {player.lastName}
             </h1>
-            <p className="mt-1 text-sm text-slate-600">
-              Documento: {player.documentType === "ID_CARD" ? "CI" : "Pasaporte"}{" "}
-              {player.documentNumber}
+            <p className="mt-2 text-sm text-slate-600">
+              Documento: {docLabel} {player.documentNumber}
             </p>
-            <p className="mt-1 text-sm text-slate-600">Estado: {statusLabel}</p>
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+              <span className="rounded-full bg-emerald-100 px-3 py-1 font-semibold text-emerald-700">
+                {statusLabel}
+              </span>
+              <span className="rounded-full bg-indigo-100 px-3 py-1 font-semibold text-indigo-700">
+                {genderLabel}
+              </span>
+              {player.phone && (
+                <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-700">
+                  {player.phone}
+                </span>
+              )}
+            </div>
           </div>
+
           <Link
             href="/admin/players"
-            className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow-sm transition hover:bg-slate-800"
+            className="inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white shadow-sm transition hover:bg-slate-800"
           >
             Volver
           </Link>
         </div>
 
-        <div className="mt-8 grid gap-8 sm:grid-cols-[200px_1fr]">
-          <div className="flex items-start justify-center">
-            <div className="h-48 w-48 overflow-hidden rounded-2xl bg-slate-100 ring-1 ring-slate-200">
+        <div className="mt-10 grid gap-8 lg:grid-cols-[260px_1fr]">
+          <div className="flex flex-col items-center gap-4">
+            <div className="h-56 w-56 overflow-hidden rounded-[28px] border border-white bg-slate-100 shadow-[0_18px_40px_-25px_rgba(15,23,42,0.45)]">
               {player.photoUrl ? (
                 <img
                   src={player.photoUrl}
@@ -240,68 +292,66 @@ export default function PlayerProfilePage() {
                 </div>
               )}
             </div>
+            <div className="w-full rounded-2xl border border-slate-200/70 bg-white p-4 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+                Identidad
+              </p>
+              <p className="mt-3 text-sm font-semibold text-slate-900">
+                {docLabel} {player.documentNumber}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">Ubicacion</p>
+              <p className="text-sm font-semibold text-slate-900">{locationLabel}</p>
+            </div>
           </div>
 
-          <div className="grid gap-4 text-sm text-slate-700 sm:grid-cols-2">
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-              <p className="text-xs font-semibold uppercase text-slate-500">Genero</p>
-              <p className="mt-2 text-base font-semibold text-slate-900">{genderLabel}</p>
+          <div className="space-y-6">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200/70 bg-white p-5 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+                  Fecha nacimiento
+                </p>
+                <p className="mt-2 text-lg font-semibold text-slate-900">
+                  {dob ?? "Sin dato"}
+                </p>
+                <p className="mt-1 text-sm text-slate-500">
+                  {age !== null ? `${age} años` : "Edad no registrada"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200/70 bg-white p-5 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+                  Resumen competitivo
+                </p>
+                <p className="mt-2 text-lg font-semibold text-slate-900">
+                  {stats.matchesPlayed} partidos
+                </p>
+                <p className="mt-1 text-sm text-slate-500">
+                  {stats.matchesWon} ganados · {stats.matchesLost} perdidos
+                </p>
+              </div>
             </div>
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-              <p className="text-xs font-semibold uppercase text-slate-500">Fecha nacimiento</p>
-              <p className="mt-2 text-base font-semibold text-slate-900">
-                {dob ?? "Sin dato"}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-              <p className="text-xs font-semibold uppercase text-slate-500">Edad</p>
-              <p className="mt-2 text-base font-semibold text-slate-900">
-                {age !== null ? `${age} años` : "Sin dato"}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-              <p className="text-xs font-semibold uppercase text-slate-500">Telefono</p>
-              <p className="mt-2 text-base font-semibold text-slate-900">
-                {player.phone ?? "Sin dato"}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-              <p className="text-xs font-semibold uppercase text-slate-500">Ubicacion</p>
-              <p className="mt-2 text-base font-semibold text-slate-900">
-                {[player.city, player.country].filter(Boolean).join(", ") || "Sin dato"}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-              <p className="text-xs font-semibold uppercase text-slate-500">
-                Partidos jugados
-              </p>
-              <p className="mt-2 text-base font-semibold text-slate-900">
-                {stats.matchesPlayed}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-              <p className="text-xs font-semibold uppercase text-slate-500">
-                Partidos ganados
-              </p>
-              <p className="mt-2 text-base font-semibold text-slate-900">
-                {stats.matchesWon}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-              <p className="text-xs font-semibold uppercase text-slate-500">
-                Partidos perdidos
-              </p>
-              <p className="mt-2 text-base font-semibold text-slate-900">
-                {stats.matchesLost}
-              </p>
+
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {statsCards.map((item) => (
+                <div
+                  key={item.label}
+                  className="rounded-2xl border border-slate-200/60 bg-gradient-to-br from-white via-white to-amber-50/60 p-4 shadow-sm"
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                    {item.label}
+                  </p>
+                  <p className="mt-3 text-2xl font-semibold text-slate-900">
+                    {item.value}
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
         </div>
 
-        <div className="mt-8 rounded-2xl border border-slate-200/80 bg-slate-50/60 p-5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="mt-10 rounded-3xl border border-slate-200/80 bg-slate-50/70 p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
                 Ranking por categoria
               </p>
               <p className="mt-1 text-sm text-slate-600">
@@ -311,50 +361,43 @@ export default function PlayerProfilePage() {
           </div>
 
           {rankingLoading ? (
-            <p className="mt-3 text-sm text-slate-500">Cargando ranking...</p>
+            <p className="mt-4 text-sm text-slate-500">Cargando ranking...</p>
           ) : rankings.length === 0 ? (
-            <p className="mt-3 text-sm text-slate-500">Sin ranking disponible.</p>
+            <p className="mt-4 text-sm text-slate-500">Sin ranking disponible.</p>
           ) : (
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
               {rankings.map((entry) => (
                 <div
                   key={`${entry.leagueId}-${entry.seasonId}-${entry.categoryId}`}
-                  className="rounded-2xl border border-slate-200/70 bg-white px-4 py-3 shadow-sm"
+                  className="rounded-2xl border border-white bg-white px-4 py-4 shadow-[0_16px_40px_-30px_rgba(15,23,42,0.4)]"
                 >
-                  <p className="text-sm font-semibold text-slate-900">
-                    {entry.leagueName}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Temporada:{" "}
-                    <span className="font-semibold text-slate-800">
-                      {entry.seasonName}
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {entry.leagueName}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Temporada {entry.seasonName}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Categoria: {entry.categoryName} ({entry.categoryAbbreviation})
+                      </p>
+                    </div>
+                    <div className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
+                      #{entry.position ?? "-"}
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-slate-600">
+                    <span className="rounded-full bg-slate-100 px-3 py-1">
+                      {entry.points} pts
                     </span>
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Categoria:{" "}
-                    <span className="font-semibold text-slate-800">
-                      {entry.categoryName} ({entry.categoryAbbreviation})
+                    <span className="rounded-full bg-slate-100 px-3 py-1">
+                      {entry.totalPlayers} jugadores
                     </span>
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Ranking:{" "}
-                    <span className="font-semibold text-slate-800">
-                      {entry.position ?? "-"}
-                    </span>{" "}
-                    / {entry.totalPlayers}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Puntos:{" "}
-                    <span className="font-semibold text-slate-800">
-                      {entry.points}
+                    <span className="rounded-full bg-slate-100 px-3 py-1">
+                      {entry.sportName ?? "Sin deporte"}
                     </span>
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Deporte:{" "}
-                    <span className="font-semibold text-slate-800">
-                      {entry.sportName ?? "-"}
-                    </span>
-                  </p>
+                  </div>
                 </div>
               ))}
             </div>

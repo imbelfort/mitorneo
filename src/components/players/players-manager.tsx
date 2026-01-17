@@ -22,11 +22,15 @@ type Player = {
   country: string | null;
   photoUrl: string | null;
   status: PlayerStatus;
+  createdById?: string | null;
 };
 
 type Props = {
   initialPlayers: Player[];
   canConfirm: boolean;
+  scope?: "all" | "own";
+  currentUserId?: string;
+  currentUserRole?: "ADMIN" | "TOURNAMENT_ADMIN" | string;
 };
 
 const statusCopy: Record<PlayerStatus, string> = {
@@ -69,7 +73,13 @@ const cityOptionsByCountry: Record<string, string[]> = {
   Espana: ["Madrid", "Barcelona", "Valencia", "Sevilla", "Bilbao"],
 };
 
-export default function PlayersManager({ initialPlayers, canConfirm }: Props) {
+export default function PlayersManager({
+  initialPlayers,
+  canConfirm,
+  scope = "all",
+  currentUserId,
+  currentUserRole,
+}: Props) {
   const router = useRouter();
   const [players, setPlayers] = useState<Player[]>(initialPlayers);
   const [loading, setLoading] = useState(false);
@@ -77,6 +87,7 @@ export default function PlayersManager({ initialPlayers, canConfirm }: Props) {
   const [message, setMessage] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
   const [form, setForm] = useState({
     documentType: "ID_CARD" as DocumentType,
     documentNumber: "",
@@ -205,6 +216,10 @@ export default function PlayersManager({ initialPlayers, canConfirm }: Props) {
   };
 
   const startEditing = (player: Player) => {
+    if (!canEditPlayer(player)) {
+      setMessage("Solo lectura");
+      return;
+    }
     setEditingId(player.id);
     const dobValue =
       typeof player.dateOfBirth === "string" && player.dateOfBirth
@@ -278,8 +293,30 @@ export default function PlayersManager({ initialPlayers, canConfirm }: Props) {
     setMessage("Jugador confirmado");
   };
 
+  const canEditPlayer = (player: Player) => {
+    if (currentUserRole === "ADMIN") return true;
+    if (!currentUserId) return false;
+    return player.createdById === currentUserId;
+  };
+
+  const filteredPlayers = players.filter((player) => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return true;
+    const name = `${player.firstName} ${player.lastName}`.toLowerCase();
+    const doc = `${player.documentNumber}`.toLowerCase();
+    const city = (player.city ?? "").toLowerCase();
+    const country = (player.country ?? "").toLowerCase();
+    return (
+      name.includes(term) ||
+      doc.includes(term) ||
+      city.includes(term) ||
+      country.includes(term)
+    );
+  });
+
   const refreshPlayers = async () => {
-    const res = await fetch("/api/players", { cache: "no-store" });
+    const scopeParam = scope === "own" ? "?scope=own" : "";
+    const res = await fetch(`/api/players${scopeParam}`, { cache: "no-store" });
     const data = await res.json().catch(() => ({}));
     if (res.ok && Array.isArray(data.players)) {
       setPlayers(data.players);
@@ -491,7 +528,19 @@ export default function PlayersManager({ initialPlayers, canConfirm }: Props) {
             {players.length} {players.length === 1 ? "registro" : "registros"}
           </p>
         </div>
-        {players.length === 0 ? (
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-slate-600">
+          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+            Buscar
+          </span>
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Nombre, CI, ciudad o pais..."
+            className="w-full rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm transition placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 sm:w-72"
+          />
+        </div>
+        {filteredPlayers.length === 0 ? (
           <p className="mt-2 text-sm text-slate-600">No hay jugadores registrados.</p>
         ) : (
           <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200/70 bg-white/80 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.2)]">
@@ -505,7 +554,7 @@ export default function PlayersManager({ initialPlayers, canConfirm }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
-                {players.map((player) => (
+                {filteredPlayers.map((player) => (
                   <tr key={player.id}>
                     <td className="px-3 py-2">
                       <div className="flex flex-col">
@@ -567,13 +616,19 @@ export default function PlayersManager({ initialPlayers, canConfirm }: Props) {
                       >
                         Ver
                       </Link>
-                      <button
-                        type="button"
-                        onClick={() => startEditing(player)}
-                        className="ml-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs font-semibold text-slate-800 shadow-sm transition hover:bg-white"
-                      >
-                        Editar
-                      </button>
+                      {canEditPlayer(player) ? (
+                        <button
+                          type="button"
+                          onClick={() => startEditing(player)}
+                          className="ml-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs font-semibold text-slate-800 shadow-sm transition hover:bg-white"
+                        >
+                          Editar
+                        </button>
+                      ) : (
+                        <span className="ml-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                          Solo lectura
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}

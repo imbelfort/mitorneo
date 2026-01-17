@@ -433,7 +433,7 @@ const playoffDrawTypes = new Set(["PLAYOFF", "GROUPS_PLAYOFF"]);
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id?: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (
@@ -443,7 +443,8 @@ export async function POST(
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
-  const tournamentId = resolveId(request, params);
+  const resolvedParams = await params;
+  const tournamentId = resolveId(request, resolvedParams);
   if (!tournamentId) {
     return NextResponse.json({ error: "Torneo no encontrado" }, { status: 404 });
   }
@@ -733,10 +734,17 @@ export async function POST(
     (match) => match.stage === "PLAYOFF"
   );
 
-  const groupDays =
-    playDays.length > 2 ? playDays.slice(0, -2) : playDays;
-  const playoffDays =
-    playDays.length > 2 ? playDays.slice(-2) : playDays.slice(-2);
+  const hasPlayoffMatches = allPlayoffMatches.length > 0;
+  const groupDays = hasPlayoffMatches
+    ? playDays.length > 2
+      ? playDays.slice(0, -2)
+      : []
+    : playDays;
+  const playoffDays = hasPlayoffMatches
+    ? playDays.length > 2
+      ? playDays.slice(-2)
+      : playDays.slice(-2)
+    : [];
 
   const categoryOrderIndex = new Map<string, number>();
   categoryOrder.forEach((category, index) => {
@@ -804,12 +812,22 @@ export async function POST(
     return { error: null as string | null };
   };
 
-  const groupDayFallback = groupDays[0] ?? playDays[0];
   const dayMatchesMap = new Map<string, MatchSlot[]>();
 
+  if (roundNumbers.length > 0 && groupDays.length === 0) {
+    return NextResponse.json(
+      { error: "No hay dias disponibles para las rondas de grupos" },
+      { status: 400 }
+    );
+  }
+
+  const groupDayFallback = groupDays[groupDays.length - 1];
   roundNumbers.forEach((roundNumber, index) => {
     const dayOffset = Math.floor(index / roundsPerDay);
     const day = groupDays[dayOffset] ?? groupDayFallback;
+    if (!day) {
+      return;
+    }
     if (!dayMatchesMap.has(day)) {
       dayMatchesMap.set(day, []);
     }
@@ -832,55 +850,55 @@ export async function POST(
     }
   }
 
-  const playoffDayFallback = playoffDays[0] ?? playDays[playDays.length - 1];
-  let playoffDayIndex = 0;
-  let playoffMatchIndex = 0;
-
-  const orderedPlayoff = [...allPlayoffMatches].sort((a, b) => {
-    if (a.categoryId !== b.categoryId) {
-      return a.categoryId.localeCompare(b.categoryId);
+  const playoffRoundBuckets = new Map<number, MatchSlot[]>();
+  allPlayoffMatches.forEach((match) => {
+    const round = match.roundNumber ?? 1;
+    if (!playoffRoundBuckets.has(round)) {
+      playoffRoundBuckets.set(round, []);
     }
-    const roundA = a.roundNumber ?? 1;
-    const roundB = b.roundNumber ?? 1;
-    if (roundA !== roundB) return roundA - roundB;
-    return a.id.localeCompare(b.id);
+    playoffRoundBuckets.get(round)?.push(match);
+  });
+  const playoffRoundNumbers = Array.from(playoffRoundBuckets.keys()).sort(
+    (a, b) => a - b
+  );
+
+  const playoffDayMatches = new Map<string, MatchSlot[]>();
+  if (playoffRoundNumbers.length > 0 && playoffDays.length === 0) {
+    return NextResponse.json(
+      { error: "No hay dias disponibles para el playoff" },
+      { status: 400 }
+    );
+  }
+
+  const playoffDayFallback = playoffDays[playoffDays.length - 1];
+  playoffRoundNumbers.forEach((roundNumber, index) => {
+    const dayOffset = Math.floor(index / roundsPerDay);
+    const day = playoffDays[dayOffset] ?? playoffDayFallback;
+    if (!day) {
+      return;
+    }
+    if (!playoffDayMatches.has(day)) {
+      playoffDayMatches.set(day, []);
+    }
+    const ordered = [...(playoffRoundBuckets.get(roundNumber) ?? [])].sort(
+      (a, b) => {
+        if (a.categoryId !== b.categoryId) {
+          return a.categoryId.localeCompare(b.categoryId);
+        }
+        const roundA = a.roundNumber ?? 1;
+        const roundB = b.roundNumber ?? 1;
+        if (roundA !== roundB) return roundA - roundB;
+        return a.id.localeCompare(b.id);
+      }
+    );
+    playoffDayMatches.get(day)?.push(...ordered);
   });
 
-  while (playoffMatchIndex < orderedPlayoff.length) {
-    const day = playoffDays[playoffDayIndex] ?? playoffDayFallback;
-    const schedule = scheduleMap.get(day);
-    if (!schedule) {
-      return NextResponse.json(
-        { error: `No hay horarios configurados para ${day}` },
-        { status: 400 }
-      );
-    }
-    const slots = buildSlots(schedule);
-    const capacity = slots.length * courts.length;
-    if (capacity === 0) {
-      return NextResponse.json(
-        { error: `No hay horarios disponibles para ${day}` },
-        { status: 400 }
-      );
-    }
-    const slice = orderedPlayoff.slice(
-      playoffMatchIndex,
-      playoffMatchIndex + capacity
-    );
-    const result = assignMatchesToDay(day, slice);
+  for (const [day, dayMatches] of playoffDayMatches.entries()) {
+    const result = assignMatchesToDay(day, dayMatches);
     if (result.error) {
       return NextResponse.json({ error: result.error }, { status: 400 });
     }
-    playoffMatchIndex += slice.length;
-    playoffDayIndex += 1;
-    if (playoffDayIndex >= playoffDays.length) break;
-  }
-
-  if (playoffMatchIndex < orderedPlayoff.length) {
-    return NextResponse.json(
-      { error: "No hay suficientes dias para el playoff" },
-      { status: 400 }
-    );
   }
 
   if (updates.length > 0) {

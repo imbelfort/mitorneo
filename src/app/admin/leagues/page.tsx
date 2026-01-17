@@ -21,7 +21,6 @@ export default async function LeaguesAdminPage() {
   const isAdmin = session.user.role === "ADMIN";
 
   const leagues = await prisma.league.findMany({
-    where: isAdmin ? undefined : { ownerId: session.user.id },
     orderBy: { name: "asc" },
     include: {
       seasons: { orderBy: { startDate: "desc" } },

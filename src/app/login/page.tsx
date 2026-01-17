@@ -89,6 +89,14 @@ export default function LoginPage() {
               className="w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-900 shadow-sm transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
               placeholder="••••••••"
             />
+            <div className="flex justify-end">
+              <Link
+                href="/forgot-password"
+                className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
+              >
+                Olvide mi contrasena
+              </Link>
+            </div>
           </div>
 
           {error && (
@@ -106,16 +114,26 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-6 flex items-center justify-between text-sm text-slate-600">
-          <span>¿Sin cuenta? Usa la de demo para probar.</span>
-          <Link
-            href="/"
-            className="font-semibold text-indigo-600 hover:text-indigo-700"
-          >
-            Volver
-          </Link>
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
+          <span>Sin cuenta? Crea una nueva.</span>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/register"
+              className="font-semibold text-indigo-600 hover:text-indigo-700"
+            >
+              Crear cuenta
+            </Link>
+            <Link
+              href="/"
+              className="font-semibold text-slate-500 hover:text-slate-700"
+            >
+              Volver
+            </Link>
+          </div>
         </div>
       </div>
     </main>
   );
 }
+
+

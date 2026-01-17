@@ -254,6 +254,23 @@ export default async function AdminDashboard() {
                         </Link>
                     )}
 
+                    {session.user.role === "ADMIN" && (
+                        <Link href="/admin/users" className="group">
+                            <div className="h-full rounded-2xl bg-white p-8 shadow-sm ring-1 ring-slate-200 transition-all hover:-translate-y-1 hover:shadow-lg hover:ring-slate-500/30">
+                                <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 group-hover:bg-slate-900 group-hover:text-white transition-colors">
+                                    <Users className="h-7 w-7" />
+                                </div>
+                                <div className="mb-2 flex items-center justify-between">
+                                    <h3 className="text-lg font-bold text-slate-900 group-hover:text-slate-800 transition-colors">Usuarios</h3>
+                                    <ArrowRight className="h-5 w-5 text-slate-300 group-hover:text-slate-700 transition-colors" />
+                                </div>
+                                <p className="text-slate-600">
+                                    Administra cuentas, roles y contrasenas de los usuarios del sistema.
+                                </p>
+                            </div>
+                        </Link>
+                    )}
+
                 </div>
             </div>
         </main>

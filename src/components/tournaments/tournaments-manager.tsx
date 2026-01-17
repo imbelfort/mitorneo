@@ -235,6 +235,9 @@ export default function TournamentsManager({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [uploadingSponsors, setUploadingSponsors] = useState<
+    Record<number, boolean>
+  >({});
   const rulesEditorRef = useRef<HTMLDivElement | null>(null);
   const [rulesFocused, setRulesFocused] = useState(false);
 
@@ -250,6 +253,32 @@ export default function TournamentsManager({
     if (typeof document === "undefined") return;
     document.execCommand(command, false, value);
     syncRulesFromEditor();
+  };
+
+  const handleSponsorUpload = async (index: number, file?: File | null) => {
+    if (!file) return;
+    setUploadingSponsors((prev) => ({ ...prev, [index]: true }));
+    setError(null);
+    setMessage(null);
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await fetch("/api/uploads/sponsor-logo", {
+      method: "POST",
+      body: formData,
+    });
+
+    const data = await res.json().catch(() => ({}));
+    setUploadingSponsors((prev) => ({ ...prev, [index]: false }));
+
+    if (!res.ok) {
+      setError(data?.error ?? "No se pudo subir el logo");
+      return;
+    }
+
+    updateSponsorField(index, "imageUrl", data.url as string);
+    setMessage("Logo subido");
   };
 
   useEffect(() => {
@@ -1414,6 +1443,24 @@ export default function TournamentsManager({
                         className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
                         placeholder="https://..."
                       />
+                      <div className="flex flex-wrap items-center gap-3">
+                        <label className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-700 transition hover:border-slate-300">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) =>
+                              handleSponsorUpload(index, e.target.files?.[0])
+                            }
+                          />
+                          Subir desde galeria
+                        </label>
+                        {uploadingSponsors[index] && (
+                          <span className="text-xs text-slate-500">
+                            Subiendo...
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs font-semibold uppercase text-slate-500">

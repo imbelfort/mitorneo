@@ -13,7 +13,7 @@ const resolveId = (request: Request, params?: { id?: string }) => {
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (
@@ -23,7 +23,8 @@ export async function PATCH(
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
-  const categoryId = resolveId(request, params);
+  const resolvedParams = await params;
+  const categoryId = resolveId(request, resolvedParams);
   if (!categoryId) {
     return NextResponse.json({ error: "Categoria no encontrada" }, { status: 404 });
   }
@@ -113,6 +114,15 @@ export async function PATCH(
 
   if (!category) {
     return NextResponse.json({ error: "Categoria no encontrada" }, { status: 404 });
+  }
+
+  if (session.user.role === "TOURNAMENT_ADMIN") {
+    if (!category.createdById || category.createdById !== session.user.id) {
+      return NextResponse.json(
+        { error: "Solo puedes editar tus categorias" },
+        { status: 403 }
+      );
+    }
   }
 
   let targetSport = category.sport;
