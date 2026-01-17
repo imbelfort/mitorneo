@@ -65,8 +65,8 @@ export default function Footer() {
                 </div>
 
                 {/* Bottom Bar */}
-                <div className="pt-8 border-t border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-slate-500">
-                    <p>© {currentYear} MiTorneo. Todos los derechos reservados.</p>
+                <div className="pt-8 border-t border-slate-800 flex flex-col-reverse md:flex-row justify-between items-center gap-4 text-sm text-slate-500">
+                    <p className="text-center md:text-left">© {currentYear} MiTorneo. Todos los derechos reservados.</p>
                     <div className="flex gap-6">
                         <Link href="/terms" className="hover:text-slate-300 transition-colors">Términos</Link>
                         <Link href="/privacy" className="hover:text-slate-300 transition-colors">Privacidad</Link>

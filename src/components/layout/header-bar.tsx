@@ -73,24 +73,27 @@ export default function HeaderBar() {
                 type="button"
                 onClick={handleSignOut}
                 disabled={loggingOut}
-                className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+                className="inline-flex items-center justify-center rounded-full bg-slate-900 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70 sm:px-4"
               >
-                {loggingOut ? "Saliendo..." : "Cerrar sesion"}
+                <span className="sm:hidden">Salir</span>
+                <span className="hidden sm:inline">{loggingOut ? "Saliendo..." : "Cerrar sesion"}</span>
               </button>
             </>
           ) : (
             <>
               <Link
                 href="/login"
-                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-700 shadow-sm transition hover:bg-slate-50"
+                className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-700 shadow-sm transition hover:bg-slate-50 sm:px-4"
               >
-                Iniciar sesion
+                <span className="sm:hidden">Entrar</span>
+                <span className="hidden sm:inline">Iniciar sesion</span>
               </Link>
               <Link
                 href="/register"
-                className="rounded-full bg-indigo-600 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white shadow-sm transition hover:bg-indigo-700"
+                className="rounded-full bg-indigo-600 px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white shadow-sm transition hover:bg-indigo-700 sm:px-4"
               >
-                Crear cuenta
+                <span className="sm:hidden">Crear</span>
+                <span className="hidden sm:inline">Crear cuenta</span>
               </Link>
             </>
           )}

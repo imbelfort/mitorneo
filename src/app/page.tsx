@@ -41,7 +41,7 @@ export default async function Home() {
 
         <div className="container relative z-20 mx-auto px-6 pt-20">
           <div className="max-w-3xl">
-            <h1 className="animate-fade-up text-5xl font-extrabold leading-tight text-white sm:text-7xl">
+            <h1 className="animate-fade-up text-4xl font-extrabold leading-tight text-white sm:text-5xl md:text-7xl">
               Organizá tu torneo.
               <span className="mt-2 block bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">
                 Competí. Ganá.
@@ -51,19 +51,19 @@ export default async function Home() {
               Creá torneos de ráquet y frontón en minutos, gestioná jugadores, fixtures y resultados desde cualquier lugar.
             </p>
 
-            <div className="animate-fade-up mt-8 flex flex-wrap gap-4 delay-200">
+            <div className="animate-fade-up mt-8 flex flex-col gap-4 sm:flex-row delay-200">
               {session?.user ? (
                 <Link
-                  href="/admin/tournaments"
-                  className="group flex items-center gap-2 rounded-full bg-indigo-600 px-8 py-3.5 text-base font-bold text-white shadow-lg transition-all hover:bg-indigo-700 hover:shadow-indigo-500/30 hover:scale-105 active:scale-95"
+                  href="/admin"
+                  className="group flex w-full items-center justify-center gap-2 rounded-full bg-indigo-600 px-8 py-3.5 text-base font-bold text-white shadow-lg transition-all hover:bg-indigo-700 hover:shadow-indigo-500/30 hover:scale-105 active:scale-95 sm:w-auto"
                 >
                   <Trophy className="h-5 w-5" />
                   Crear Torneo
                 </Link>
               ) : (
                 <Link
-                  href="/login"
-                  className="group flex items-center gap-2 rounded-full bg-indigo-600 px-8 py-3.5 text-base font-bold text-white shadow-lg transition-all hover:bg-indigo-700 hover:shadow-indigo-500/30 hover:scale-105 active:scale-95"
+                  href="/register"
+                  className="group flex w-full items-center justify-center gap-2 rounded-full bg-indigo-600 px-8 py-3.5 text-base font-bold text-white shadow-lg transition-all hover:bg-indigo-700 hover:shadow-indigo-500/30 hover:scale-105 active:scale-95 sm:w-auto"
                 >
                   <Trophy className="h-5 w-5" />
                   Crear Torneo
@@ -72,7 +72,7 @@ export default async function Home() {
 
               <Link
                 href="#upcoming"
-                className="group flex items-center gap-2 rounded-full bg-white/10 px-8 py-3.5 text-base font-bold text-white backdrop-blur-md transition-all hover:bg-white/20 hover:scale-105 active:scale-95"
+                className="group flex w-full items-center justify-center gap-2 rounded-full bg-white/10 px-8 py-3.5 text-base font-bold text-white backdrop-blur-md transition-all hover:bg-white/20 hover:scale-105 active:scale-95 sm:w-auto"
               >
                 Ver torneos activos
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
@@ -91,7 +91,7 @@ export default async function Home() {
       </section>
 
       {/* Features Section */}
-      <section className="py-20 bg-white">
+      <section className="py-12 bg-white sm:py-20">
         <div className="container mx-auto px-6">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold text-slate-900 sm:text-4xl">
@@ -154,9 +154,9 @@ export default async function Home() {
               <p className="text-slate-300 text-lg leading-relaxed mb-8">
                 MiTorneo está diseñada específicamente para respetar las reglas de juego, los formatos de competencia y las dinámicas únicas de los torneos de ráquet y frontón. Olvidate de adaptar soluciones genéricas.
               </p>
-              <div className="flex gap-6">
+              <div className="flex flex-wrap gap-4 sm:gap-6">
                 {["Reglas oficiales", "Fixtures automáticos", "Sedes múltiples"].map((item, i) => (
-                  <div key={i} className="flex items-center gap-2 text-slate-200 font-medium">
+                  <div key={i} className="flex items-center gap-2 text-slate-200 font-medium text-sm sm:text-base">
                     <div className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
                     {item}
                   </div>
@@ -177,7 +177,7 @@ export default async function Home() {
       </section>
 
       {/* How it works */}
-      <section className="py-20 bg-slate-50">
+      <section className="py-12 bg-slate-50 sm:py-20">
         <div className="container mx-auto px-6">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold text-slate-900">¿Cómo funciona?</h2>
