@@ -18,12 +18,17 @@ export default function SearchInput({
     useEffect(() => {
         const handler = setTimeout(() => {
             const params = new URLSearchParams(searchParams);
-            if (term) {
-                params.set("q", term);
-            } else {
-                params.delete("q");
+            const currentQuery = params.get("q") || "";
+
+            // Solo actualizamos si el término cambió respecto a la URL actual
+            if (currentQuery !== term) {
+                if (term) {
+                    params.set("q", term);
+                } else {
+                    params.delete("q");
+                }
+                replace(`${pathname}?${params.toString()}`);
             }
-            replace(`${pathname}?${params.toString()}`);
         }, 300);
 
         return () => {

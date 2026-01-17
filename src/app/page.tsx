@@ -220,40 +220,62 @@ export default async function Home() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {activeTournaments.map((tour) => (
-              <div key={tour.id} className="group overflow-hidden rounded-2xl bg-white border border-slate-200 hover:shadow-lg transition-all">
-                <div className="h-40 bg-slate-100 relative">
-                  <Image
-                    src={`/hero/fototres.jpeg`}
-                    alt={tour.name}
-                    fill
-                    className="object-cover transition-transform duration-500 group-hover:scale-110"
-                  />
-                </div>
-                <div className="p-6">
-                  <div className="mb-3 flex items-center justify-between">
-                    <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600 uppercase tracking-wide">
-                      {tour.sport?.name || "Torneo"}
-                    </span>
-                    <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
-                      <Calendar className="h-3.5 w-3.5" />
-                      {formatDate(tour.startDate)}
-                    </div>
+          {activeTournaments.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {activeTournaments.map((tour) => (
+                <div key={tour.id} className="group overflow-hidden rounded-2xl bg-white border border-slate-200 hover:shadow-lg transition-all">
+                  <div className="h-40 bg-slate-100 relative">
+                    <Image
+                      src={`/hero/fototres.jpeg`}
+                      alt={tour.name}
+                      fill
+                      className="object-cover transition-transform duration-500 group-hover:scale-110"
+                    />
                   </div>
-                  <h3 className="text-lg font-bold text-slate-900 mb-4 line-clamp-1">
-                    {tour.name}
-                  </h3>
-                  <Link
-                    href={`/tournaments/${tour.id}`}
-                    className="block w-full rounded-xl bg-slate-900 py-3 text-center text-sm font-bold text-white transition hover:bg-slate-800"
-                  >
-                    Ver Torneo
-                  </Link>
+                  <div className="p-6">
+                    <div className="mb-3 flex items-center justify-between">
+                      <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600 uppercase tracking-wide">
+                        {tour.sport?.name || "Torneo"}
+                      </span>
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                        <Calendar className="h-3.5 w-3.5" />
+                        {formatDate(tour.startDate)}
+                      </div>
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-900 mb-4 line-clamp-1">
+                      {tour.name}
+                    </h3>
+                    <Link
+                      href={`/tournaments/${tour.id}`}
+                      className="block w-full rounded-xl bg-slate-900 py-3 text-center text-sm font-bold text-white transition hover:bg-slate-800"
+                    >
+                      Ver Torneo
+                    </Link>
+                  </div>
                 </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50 py-16 text-center">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
+                <Trophy className="h-8 w-8 text-slate-300" />
               </div>
-            ))}
-          </div>
+              <h3 className="text-lg font-semibold text-slate-900">
+                Aún no hay torneos activos
+              </h3>
+              <p className="mt-2 max-w-sm text-sm text-slate-500">
+                Pronto verás aquí los torneos más recientes. ¡Sé el primero en crear uno!
+              </p>
+              {session?.user && (
+                <Link
+                  href="/admin"
+                  className="mt-6 inline-flex items-center gap-2 rounded-full bg-indigo-600 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-indigo-700"
+                >
+                  Crear Torneo
+                </Link>
+              )}
+            </div>
+          )}
         </div>
       </section>
 
