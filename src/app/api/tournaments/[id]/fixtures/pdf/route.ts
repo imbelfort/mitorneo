@@ -16,8 +16,15 @@ type Registration = {
   teamName?: string | null;
 };
 
-const formatTeamName = (registration?: Registration | null) => {
+const formatTeamName = (
+  registration?: Registration | null,
+  options?: { fronton?: boolean }
+) => {
   if (!registration) return "Por definir";
+  if (options?.fronton) {
+    const teamName = registration.teamName?.trim();
+    return teamName && teamName.length > 0 ? teamName : "Equipo";
+  }
   const teamName = registration.teamName?.trim();
   const players = [
     registration.player,
@@ -172,6 +179,7 @@ export async function GET(
           id: true,
           name: true,
           abbreviation: true,
+          sport: { select: { name: true } },
         },
       },
     },
@@ -212,6 +220,9 @@ export async function GET(
       categoryId: true,
       groupName: true,
       stage: true,
+      winnerSide: true,
+      outcomeType: true,
+      games: true,
       roundNumber: true,
       scheduledDate: true,
       startTime: true,
@@ -450,24 +461,47 @@ export async function GET(
           y = drawHeader(newPage, formatPrintDate(date));
           page = newPage;
         }
-        const category = categoryMap.get(match.categoryId);
-        const groupLabel =
-          match.stage === "PLAYOFF"
-            ? match.isBronzeMatch
-              ? "Bronce"
-              : playoffRoundLabels.get(match.categoryId)?.get(match.roundNumber ?? 1) ??
-                `Ronda ${match.roundNumber ?? 1}`
-            : match.groupName ?? "-";
-        const row = [
-          match.startTime ?? "",
-          clubMap.get(match.clubId ?? "") ?? "-",
-          match.courtNumber ? String(match.courtNumber) : "-",
-          category?.abbreviation ?? "N/D",
-          groupLabel,
-          formatTeamName(match.teamAId ? registrationMap.get(match.teamAId) : null),
-          "vs",
-          formatTeamName(match.teamBId ? registrationMap.get(match.teamBId) : null),
-        ];
+          const category = categoryMap.get(match.categoryId);
+          const isFronton = (category?.sport?.name ?? "")
+            .toLowerCase()
+            .includes("fronton");
+          const hasScore =
+            Array.isArray(match.games) && match.games.length > 0
+              ? true
+              : match.outcomeType !== null && match.outcomeType !== undefined;
+          const hidePlayoffNames =
+            match.stage === "PLAYOFF" &&
+            (match.roundNumber ?? 1) > 1 &&
+            !hasScore;
+          const groupLabel =
+            match.stage === "PLAYOFF"
+              ? match.isBronzeMatch
+                ? "Bronce"
+                : playoffRoundLabels.get(match.categoryId)?.get(match.roundNumber ?? 1) ??
+                  `Ronda ${match.roundNumber ?? 1}`
+              : match.groupName ?? "-";
+          const teamA = hidePlayoffNames
+            ? "Por definir"
+            : formatTeamName(
+                match.teamAId ? registrationMap.get(match.teamAId) : null,
+                { fronton: isFronton }
+              );
+          const teamB = hidePlayoffNames
+            ? "Por definir"
+            : formatTeamName(
+                match.teamBId ? registrationMap.get(match.teamBId) : null,
+                { fronton: isFronton }
+              );
+          const row = [
+            match.startTime ?? "",
+            clubMap.get(match.clubId ?? "") ?? "-",
+            match.courtNumber ? String(match.courtNumber) : "-",
+            category?.abbreviation ?? "N/D",
+            groupLabel,
+            teamA,
+            "vs",
+            teamB,
+          ];
         y = drawRow(page, y, row);
       });
     }

@@ -145,21 +145,41 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "contact", label: "Contacto" },
 ];
 
-const formatDateLong = (value?: string | null) => {
-  if (!value) return "N/D";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleDateString("es-BO", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-};
+  const formatDateLong = (value?: string | null) => {
+    if (!value) return "N/D";
+    const trimmed = value.trim();
+    if (!trimmed) return "N/D";
+    const datePart = trimmed.includes("T") ? trimmed.split("T")[0] : trimmed;
+    const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(datePart);
+    const parsed = dateOnlyMatch
+      ? new Date(
+          Number(dateOnlyMatch[1]),
+          Number(dateOnlyMatch[2]) - 1,
+          Number(dateOnlyMatch[3])
+        )
+      : new Date(trimmed);
+    if (Number.isNaN(parsed.getTime())) return value;
+    return parsed.toLocaleDateString("es-BO", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  };
 
 const formatDateShort = (value?: string | null) => {
   if (!value) return "N/D";
-  const parsed = new Date(value);
+  const trimmed = value.trim();
+  if (!trimmed) return "N/D";
+  const datePart = trimmed.includes("T") ? trimmed.split("T")[0] : trimmed;
+  const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(datePart);
+  const parsed = dateOnlyMatch
+    ? new Date(
+        Number(dateOnlyMatch[1]),
+        Number(dateOnlyMatch[2]) - 1,
+        Number(dateOnlyMatch[3])
+      )
+    : new Date(trimmed);
   if (Number.isNaN(parsed.getTime())) return value;
   return parsed.toLocaleDateString("es-BO", {
     year: "numeric",

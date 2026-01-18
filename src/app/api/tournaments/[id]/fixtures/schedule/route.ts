@@ -507,6 +507,13 @@ export async function POST(
       },
     ])
   );
+  const availablePlayDays = playDays.filter((day) => scheduleMap.has(day));
+  if (availablePlayDays.length === 0) {
+    return NextResponse.json(
+      { error: "No hay horarios configurados para los dias de juego" },
+      { status: 400 }
+    );
+  }
 
   const clubs = await prisma.tournamentClub.findMany({
     where: { tournamentId },
@@ -736,14 +743,14 @@ export async function POST(
 
   const hasPlayoffMatches = allPlayoffMatches.length > 0;
   const groupDays = hasPlayoffMatches
-    ? playDays.length > 2
-      ? playDays.slice(0, -2)
+    ? availablePlayDays.length > 2
+      ? availablePlayDays.slice(0, -2)
       : []
-    : playDays;
+    : availablePlayDays;
   const playoffDays = hasPlayoffMatches
-    ? playDays.length > 2
-      ? playDays.slice(-2)
-      : playDays.slice(-2)
+    ? availablePlayDays.length > 2
+      ? availablePlayDays.slice(-2)
+      : availablePlayDays.slice(-2)
     : [];
 
   const categoryOrderIndex = new Map<string, number>();
@@ -785,29 +792,23 @@ export async function POST(
     if (slots.length === 0) {
       return { error: `No hay horarios disponibles para ${day}` };
     }
-    const capacity = slots.length * courts.length;
-    if (dayMatches.length > capacity) {
-      return {
-        error: `No hay suficientes canchas u horarios para ${day}`,
-      };
-    }
+    const slotCount = slots.length;
+    const courtCount = courts.length;
+    const totalSlots = slotCount * courtCount;
 
-    let matchIndex = 0;
-    for (const slot of slots) {
-      for (const court of courts) {
-        if (matchIndex >= dayMatches.length) break;
-        const match = dayMatches[matchIndex];
-        updates.push({
-          id: match.id,
-          scheduledDate: new Date(day),
-          startTime: slot,
-          clubId: court.clubId,
-          courtNumber: court.courtNumber,
-        });
-        matchIndex += 1;
-      }
-      if (matchIndex >= dayMatches.length) break;
-    }
+    dayMatches.forEach((match, index) => {
+      const slotIndex = Math.floor(index / courtCount) % slotCount;
+      const courtIndex = index % courtCount;
+      const slot = slots[slotIndex];
+      const court = courts[courtIndex];
+      updates.push({
+        id: match.id,
+        scheduledDate: new Date(day),
+        startTime: slot,
+        clubId: court.clubId,
+        courtNumber: court.courtNumber,
+      });
+    });
 
     return { error: null as string | null };
   };

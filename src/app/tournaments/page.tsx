@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import Image from "next/image";
-import { Search, Calendar, MapPin, Trophy } from "lucide-react";
+import { Calendar, MapPin, Trophy } from "lucide-react";
 import SearchInput from "@/components/ui/search-input";
 
 const formatDate = (date: Date) => {
@@ -15,14 +15,22 @@ const formatDate = (date: Date) => {
 export default async function TournamentsPage({
     searchParams,
 }: {
-    searchParams: Promise<{ q?: string }>;
+    searchParams: Promise<{ q?: string; status?: string; sport?: string }>;
 }) {
-    const { q } = await searchParams;
+    const { q, status, sport } = await searchParams;
     const query = q || "";
+    const statusFilter = status || "all";
+    const sportFilter = sport || "all";
+
+    const sports = await prisma.sport.findMany({
+        orderBy: { name: "asc" },
+        select: { id: true, name: true },
+    });
 
     const tournaments = await prisma.tournament.findMany({
         where: {
-            name: { contains: query },
+            ...(query ? { name: { contains: query } } : {}),
+            ...(sportFilter !== "all" ? { sportId: sportFilter } : {}),
         },
         include: {
             sport: true,
@@ -34,10 +42,28 @@ export default async function TournamentsPage({
         },
     });
 
+    const filteredTournaments = tournaments.filter((tournament) => {
+        if (statusFilter === "live") return tournament.status === "ACTIVE";
+        if (statusFilter === "upcoming") return tournament.status === "WAITING";
+        if (statusFilter === "past") return tournament.status === "FINISHED";
+        return true;
+    });
+
+    const buildHref = (next: { status?: string | null; sport?: string | null }) => {
+        const params = new URLSearchParams();
+        if (query) params.set("q", query);
+        const nextStatus = next.status ?? statusFilter;
+        const nextSport = next.sport ?? sportFilter;
+        if (nextStatus && nextStatus !== "all") params.set("status", nextStatus);
+        if (nextSport && nextSport !== "all") params.set("sport", nextSport);
+        const qs = params.toString();
+        return qs ? `/tournaments?${qs}` : "/tournaments";
+    };
+
     return (
         <main className="min-h-screen bg-slate-50 py-12">
             <div className="container mx-auto px-6">
-                <div className="mb-12 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+                <div className="mb-8 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
                     <div>
                         <h1 className="text-3xl font-bold text-slate-900">Torneos</h1>
                         <p className="mt-2 text-slate-600">
@@ -48,7 +74,64 @@ export default async function TournamentsPage({
                     <SearchInput placeholder="Buscar por nombre..." />
                 </div>
 
-                {tournaments.length === 0 ? (
+                <div className="mb-10 flex flex-col gap-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-wrap items-center gap-2 text-sm">
+                        <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                            Estado
+                        </span>
+                        {[
+                            { key: "all", label: "Todos" },
+                            { key: "live", label: "En vivo" },
+                            { key: "upcoming", label: "Futuros" },
+                            { key: "past", label: "Anteriores" },
+                        ].map((item) => {
+                            const isActive = statusFilter === item.key;
+                            return (
+                                <Link
+                                    key={item.key}
+                                    href={buildHref({ status: item.key === "all" ? null : item.key })}
+                                    className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition ${isActive
+                                        ? "border-indigo-600 bg-indigo-600 text-white shadow-sm"
+                                        : "border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:text-indigo-600"
+                                        }`}
+                                >
+                                    {item.label}
+                                </Link>
+                            );
+                        })}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-sm">
+                        <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                            Deporte
+                        </span>
+                        <Link
+                            href={buildHref({ sport: null })}
+                            className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition ${sportFilter === "all"
+                                ? "border-slate-900 bg-slate-900 text-white"
+                                : "border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:text-indigo-600"
+                                }`}
+                        >
+                            Todos
+                        </Link>
+                        {sports.map((item) => {
+                            const isActive = sportFilter === item.id;
+                            return (
+                                <Link
+                                    key={item.id}
+                                    href={buildHref({ sport: item.id })}
+                                    className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition ${isActive
+                                        ? "border-slate-900 bg-slate-900 text-white"
+                                        : "border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:text-indigo-600"
+                                        }`}
+                                >
+                                    {item.name}
+                                </Link>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {filteredTournaments.length === 0 ? (
                     <div className="flex h-64 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 text-center">
                         <Trophy className="mb-4 h-12 w-12 text-slate-300" />
                         <h3 className="text-lg font-medium text-slate-900">
@@ -60,7 +143,7 @@ export default async function TournamentsPage({
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                        {tournaments.map((tournament) => (
+                        {filteredTournaments.map((tournament) => (
                             <Link
                                 key={tournament.id}
                                 href={`/tournaments/${tournament.id}`}
