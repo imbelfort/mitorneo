@@ -26,6 +26,7 @@ type DrawCategoryResponse = {
   hasBronzeMatch?: boolean | null;
 };
 
+
 type DrawCategory = {
   categoryId: string;
   drawType: DrawType | null;
@@ -157,7 +158,7 @@ export default function TournamentDraws({ tournamentId, tournamentName }: Props)
       return;
     }
     if (Array.isArray(data.categories)) {
-      const mapped = (data.categories as DrawCategoryResponse[]).map((item) => ({
+      const mapped = data.categories.map((item) => ({
         categoryId: item.categoryId,
         drawType: item.drawType ?? null,
         registrationCount: item.registrationCount,

@@ -7,6 +7,12 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 export const runtime = "nodejs";
 
 type MatchStage = "GROUP" | "PLAYOFF";
+type DrawType = "ROUND_ROBIN" | "GROUPS_PLAYOFF" | "PLAYOFF";
+type Tiebreaker =
+  | "SETS_DIFF"
+  | "MATCHES_WON"
+  | "POINTS_PER_MATCH"
+  | "POINTS_DIFF";
 
 type Registration = {
   id: string;
@@ -14,6 +20,25 @@ type Registration = {
   partner: { firstName: string; lastName: string } | null;
   partnerTwo: { firstName: string; lastName: string } | null;
   teamName?: string | null;
+  createdAt?: Date | string | null;
+  seed?: number | null;
+  rankingNumber?: number | null;
+};
+
+type StandingEntry = {
+  id: string;
+  categoryId: string;
+  groupName: string;
+  points: number;
+  matchesWon: number;
+  matchesLost: number;
+  setsWon: number;
+  setsLost: number;
+  pointsWon: number;
+  pointsLost: number;
+  seed: number | null;
+  rankingNumber: number | null;
+  createdAt: Date;
 };
 
 const formatTeamName = (
@@ -45,6 +70,115 @@ const nextPowerOfTwo = (value: number) => {
   let size = 1;
   while (size < value) size *= 2;
   return size;
+};
+
+const DEFAULT_TIEBREAKERS: Tiebreaker[] = [
+  "SETS_DIFF",
+  "MATCHES_WON",
+  "POINTS_PER_MATCH",
+  "POINTS_DIFF",
+];
+
+const normalizeTiebreakerOrder = (value?: string[]) => {
+  const filtered = Array.isArray(value)
+    ? value.filter((item): item is Tiebreaker =>
+        DEFAULT_TIEBREAKERS.includes(item as Tiebreaker)
+      )
+    : [];
+  const unique = Array.from(new Set(filtered));
+  const hasAll = DEFAULT_TIEBREAKERS.every((item) => unique.includes(item));
+  if (!hasAll || unique.length !== DEFAULT_TIEBREAKERS.length) {
+    return [...DEFAULT_TIEBREAKERS];
+  }
+  return unique;
+};
+
+const formatOrdinal = (value: number) => {
+  if (value === 1) return "1ro";
+  if (value === 2) return "2do";
+  if (value === 3) return "3ro";
+  return `${value}to`;
+};
+
+const parseGames = (value: unknown) => {
+  if (!Array.isArray(value)) return [] as { a: number; b: number }[];
+  const games: { a: number; b: number }[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") continue;
+    const a = (entry as { a?: unknown }).a;
+    const b = (entry as { b?: unknown }).b;
+    if (typeof a !== "number" || typeof b !== "number") continue;
+    if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
+    games.push({ a, b });
+  }
+  return games;
+};
+
+const computeMatchResult = (games: { a: number; b: number }[]) => {
+  if (games.length === 0) return null;
+  let setsA = 0;
+  let setsB = 0;
+  let pointsA = 0;
+  let pointsB = 0;
+  for (const game of games) {
+    pointsA += game.a;
+    pointsB += game.b;
+    if (game.a > game.b) {
+      setsA += 1;
+    } else if (game.b > game.a) {
+      setsB += 1;
+    }
+  }
+  if (setsA === 0 && setsB === 0) return null;
+  if (setsA === setsB) return null;
+  return {
+    setsA,
+    setsB,
+    pointsA,
+    pointsB,
+    winner: setsA > setsB ? "A" : "B",
+  } as const;
+};
+
+const compareStandings = (
+  a: {
+    points: number;
+    matchesWon: number;
+    setsWon: number;
+    setsLost: number;
+    pointsWon: number;
+    pointsLost: number;
+    seed: number | null;
+    rankingNumber: number | null;
+    createdAt: Date;
+  },
+  b: {
+    points: number;
+    matchesWon: number;
+    setsWon: number;
+    setsLost: number;
+    pointsWon: number;
+    pointsLost: number;
+    seed: number | null;
+    rankingNumber: number | null;
+    createdAt: Date;
+  },
+  order: Tiebreaker[]
+) => {
+  const metrics: Record<Tiebreaker, (item: typeof a) => number> = {
+    SETS_DIFF: (item) => item.setsWon - item.setsLost,
+    MATCHES_WON: (item) => item.matchesWon,
+    POINTS_PER_MATCH: (item) => item.points,
+    POINTS_DIFF: (item) => item.pointsWon - item.pointsLost,
+  };
+  for (const rule of order) {
+    const diff = metrics[rule](b) - metrics[rule](a);
+    if (diff !== 0) return diff;
+  }
+  const seedA = a.seed ?? a.rankingNumber ?? Number.MAX_SAFE_INTEGER;
+  const seedB = b.seed ?? b.rankingNumber ?? Number.MAX_SAFE_INTEGER;
+  if (seedA !== seedB) return seedA - seedB;
+  return a.createdAt.getTime() - b.createdAt.getTime();
 };
 
 const formatPlayoffRoundLabel = (roundSize: number, roundNumber: number) => {
@@ -192,6 +326,9 @@ export async function GET(
       teamName: true,
       categoryId: true,
       groupName: true,
+      createdAt: true,
+      seed: true,
+      rankingNumber: true,
       player: { select: { firstName: true, lastName: true } },
       partner: { select: { firstName: true, lastName: true } },
       partnerTwo: { select: { firstName: true, lastName: true } },
@@ -201,6 +338,17 @@ export async function GET(
   const qualifiers = await prisma.tournamentGroupQualifier.findMany({
     where: { tournamentId },
     select: { categoryId: true, groupName: true, qualifiers: true },
+  });
+
+  const groupPoints = await prisma.tournamentGroupPoints.findUnique({
+    where: { tournamentId },
+    select: {
+      winPoints: true,
+      winWithoutGameLossPoints: true,
+      lossPoints: true,
+      lossWithGameWinPoints: true,
+      tiebreakerOrder: true,
+    },
   });
 
   const clubs = await prisma.tournamentClub.findMany({
@@ -222,6 +370,7 @@ export async function GET(
       stage: true,
       winnerSide: true,
       outcomeType: true,
+      outcomeSide: true,
       games: true,
       roundNumber: true,
       scheduledDate: true,
@@ -237,6 +386,9 @@ export async function GET(
   const categoryMap = new Map(
     categories.map((item) => [item.category.id, item.category])
   );
+  const categoryDrawTypeMap = new Map(
+    categories.map((item) => [item.category.id, item.drawType as DrawType | null])
+  );
   const registrationMap = new Map(
     registrations.map((registration) => [registration.id, registration])
   );
@@ -247,6 +399,113 @@ export async function GET(
       entry.qualifiers,
     ])
   );
+
+  const tiebreakerOrder = normalizeTiebreakerOrder(
+    Array.isArray(groupPoints?.tiebreakerOrder)
+      ? (groupPoints?.tiebreakerOrder as string[])
+      : undefined
+  );
+  const groupPointsConfig = {
+    winPoints: groupPoints?.winPoints ?? 0,
+    winWithoutGameLossPoints: groupPoints?.winWithoutGameLossPoints ?? 0,
+    lossPoints: groupPoints?.lossPoints ?? 0,
+    lossWithGameWinPoints: groupPoints?.lossWithGameWinPoints ?? 0,
+  };
+
+  const standingsById = new Map<string, StandingEntry>();
+
+  registrations.forEach((registration) => {
+    const createdAt = registration.createdAt
+      ? new Date(registration.createdAt)
+      : new Date(0);
+    standingsById.set(registration.id, {
+      id: registration.id,
+      categoryId: registration.categoryId,
+      groupName: (registration.groupName || "A").trim() || "A",
+      points: 0,
+      matchesWon: 0,
+      matchesLost: 0,
+      setsWon: 0,
+      setsLost: 0,
+      pointsWon: 0,
+      pointsLost: 0,
+      seed: registration.seed ?? null,
+      rankingNumber: registration.rankingNumber ?? null,
+      createdAt,
+    });
+  });
+
+  matches
+    .filter((match) => match.stage === "GROUP")
+    .forEach((match) => {
+      const result = computeMatchResult(parseGames(match.games));
+      if (!result) return;
+      const teamA = match.teamAId ? standingsById.get(match.teamAId) : null;
+      const teamB = match.teamBId ? standingsById.get(match.teamBId) : null;
+      if (!teamA || !teamB) return;
+
+      teamA.setsWon += result.setsA;
+      teamA.setsLost += result.setsB;
+      teamA.pointsWon += result.pointsA;
+      teamA.pointsLost += result.pointsB;
+      teamB.setsWon += result.setsB;
+      teamB.setsLost += result.setsA;
+      teamB.pointsWon += result.pointsB;
+      teamB.pointsLost += result.pointsA;
+
+      if (result.winner === "A") {
+        teamA.matchesWon += 1;
+        teamB.matchesLost += 1;
+        teamA.points +=
+          result.setsB === 0
+            ? groupPointsConfig.winWithoutGameLossPoints
+            : groupPointsConfig.winPoints;
+        teamB.points +=
+          result.setsB > 0
+            ? groupPointsConfig.lossWithGameWinPoints
+            : groupPointsConfig.lossPoints;
+      } else {
+        teamB.matchesWon += 1;
+        teamA.matchesLost += 1;
+        teamB.points +=
+          result.setsA === 0
+            ? groupPointsConfig.winWithoutGameLossPoints
+            : groupPointsConfig.winPoints;
+        teamA.points +=
+          result.setsA > 0
+            ? groupPointsConfig.lossWithGameWinPoints
+            : groupPointsConfig.lossPoints;
+      }
+    });
+
+  const playoffLabelMap = new Map<string, string>();
+  const groupStandingsByCategory = new Map<string, Map<string, StandingEntry[]>>();
+  standingsById.forEach((entry) => {
+    if (!groupStandingsByCategory.has(entry.categoryId)) {
+      groupStandingsByCategory.set(entry.categoryId, new Map());
+    }
+    const groupMap = groupStandingsByCategory.get(entry.categoryId);
+    if (!groupMap) return;
+    if (!groupMap.has(entry.groupName)) {
+      groupMap.set(entry.groupName, []);
+    }
+    groupMap.get(entry.groupName)?.push(entry);
+  });
+
+  groupStandingsByCategory.forEach((groups) => {
+    groups.forEach((entries, groupName) => {
+      const ordered = [...entries].sort((a, b) =>
+        compareStandings(a, b, tiebreakerOrder)
+      );
+      ordered.forEach((entry, index) => {
+        const position = index + 1;
+        playoffLabelMap.set(
+          entry.id,
+          `${formatOrdinal(position)} Grupo ${groupName}`
+        );
+      });
+    });
+  });
 
   const qualifiedCountByCategory = new Map<string, number>();
   categories.forEach((category) => {
@@ -308,6 +567,29 @@ export async function GET(
       labelMap.set(round, formatPlayoffRoundLabel(roundSize, round));
     });
     playoffRoundLabels.set(categoryId, labelMap);
+  });
+
+  const hasMatchScore = (match: (typeof matches)[number]) => {
+    if (Array.isArray(match.games) && match.games.length > 0) return true;
+    if (match.outcomeType && match.outcomeType !== "PLAYED") {
+      return Boolean(match.outcomeSide || match.winnerSide);
+    }
+    return false;
+  };
+
+  const groupStageCompleteByCategory = new Map<string, boolean>();
+  const groupMatchesByCategory = new Map<string, typeof matches>();
+  matches
+    .filter((match) => match.stage === "GROUP")
+    .forEach((match) => {
+      if (!groupMatchesByCategory.has(match.categoryId)) {
+        groupMatchesByCategory.set(match.categoryId, []);
+      }
+      groupMatchesByCategory.get(match.categoryId)?.push(match);
+    });
+  groupMatchesByCategory.forEach((list, categoryId) => {
+    const complete = list.length > 0 && list.every((match) => hasMatchScore(match));
+    groupStageCompleteByCategory.set(categoryId, complete);
   });
 
   const scheduledMatches = matches
@@ -465,14 +747,12 @@ export async function GET(
           const isFronton = (category?.sport?.name ?? "")
             .toLowerCase()
             .includes("fronton");
-          const hasScore =
-            Array.isArray(match.games) && match.games.length > 0
-              ? true
-              : match.outcomeType !== null && match.outcomeType !== undefined;
-          const hidePlayoffNames =
-            match.stage === "PLAYOFF" &&
-            (match.roundNumber ?? 1) > 1 &&
-            !hasScore;
+          const drawType = categoryDrawTypeMap.get(match.categoryId) ?? null;
+          const showPlayoffLabel =
+            match.stage === "PLAYOFF" && drawType === "GROUPS_PLAYOFF";
+          const allowPlayoffNames =
+            !showPlayoffLabel ||
+            (groupStageCompleteByCategory.get(match.categoryId) ?? false);
           const groupLabel =
             match.stage === "PLAYOFF"
               ? match.isBronzeMatch
@@ -480,18 +760,24 @@ export async function GET(
                 : playoffRoundLabels.get(match.categoryId)?.get(match.roundNumber ?? 1) ??
                   `Ronda ${match.roundNumber ?? 1}`
               : match.groupName ?? "-";
-          const teamA = hidePlayoffNames
-            ? "Por definir"
-            : formatTeamName(
+          const teamALabel = match.teamAId
+            ? playoffLabelMap.get(match.teamAId) ?? null
+            : null;
+          const teamBLabel = match.teamBId
+            ? playoffLabelMap.get(match.teamBId) ?? null
+            : null;
+          const teamA = allowPlayoffNames
+            ? formatTeamName(
                 match.teamAId ? registrationMap.get(match.teamAId) : null,
                 { fronton: isFronton }
-              );
-          const teamB = hidePlayoffNames
-            ? "Por definir"
-            : formatTeamName(
+              )
+            : teamALabel ?? "Por definir";
+          const teamB = allowPlayoffNames
+            ? formatTeamName(
                 match.teamBId ? registrationMap.get(match.teamBId) : null,
                 { fronton: isFronton }
-              );
+              )
+            : teamBLabel ?? "Por definir";
           const row = [
             match.startTime ?? "",
             clubMap.get(match.clubId ?? "") ?? "-",

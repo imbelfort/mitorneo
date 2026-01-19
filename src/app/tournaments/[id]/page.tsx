@@ -184,6 +184,8 @@ export default async function TournamentPublicPage({
     playDays: Array.isArray(tournament.playDays)
       ? tournament.playDays.filter((day): day is string => typeof day === "string")
       : [],
+    schedulePublished: tournament.schedulePublished,
+    groupsPublished: tournament.groupsPublished,
     sport: tournament.sport,
     league: tournament.league,
     owner: tournament.owner,

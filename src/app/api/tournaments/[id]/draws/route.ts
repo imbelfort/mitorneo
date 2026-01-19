@@ -88,7 +88,7 @@ export async function GET(
 
   const tournament = await prisma.tournament.findUnique({
     where: { id: tournamentId },
-    select: { id: true, ownerId: true, status: true },
+    select: { id: true, ownerId: true, status: true, groupsPublished: true },
   });
 
   if (!tournament) {
@@ -106,7 +106,10 @@ export async function GET(
   }
 
   const categories = await loadDrawCategories(tournamentId);
-  return NextResponse.json({ categories });
+  return NextResponse.json({
+    categories,
+    groupsPublished: tournament.groupsPublished,
+  });
 }
 
 export async function PUT(
@@ -248,4 +251,57 @@ export async function PUT(
 
   const updated = await loadDrawCategories(tournamentId);
   return NextResponse.json({ categories: updated });
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  const session = await getServerSession(authOptions);
+  if (
+    !session?.user ||
+    (session.user.role !== "ADMIN" && session.user.role !== "TOURNAMENT_ADMIN")
+  ) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  }
+
+  const tournamentId = resolveId(request, params);
+  if (!tournamentId) {
+    return NextResponse.json({ error: "Torneo no encontrado" }, { status: 404 });
+  }
+
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+    select: { id: true, ownerId: true, status: true },
+  });
+
+  if (!tournament) {
+    return NextResponse.json({ error: "Torneo no encontrado" }, { status: 404 });
+  }
+
+  if (session.user.role !== "ADMIN" && tournament.ownerId !== session.user.id) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  }
+
+  if (tournament.status === "FINISHED") {
+    return NextResponse.json(
+      { error: "El torneo ya esta finalizado" },
+      { status: 400 }
+    );
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const published =
+    typeof body?.groupsPublished === "boolean" ? body.groupsPublished : null;
+  if (published === null) {
+    return NextResponse.json({ error: "Estado invalido" }, { status: 400 });
+  }
+
+  const updated = await prisma.tournament.update({
+    where: { id: tournamentId },
+    data: { groupsPublished: published },
+    select: { groupsPublished: true },
+  });
+
+  return NextResponse.json({ groupsPublished: updated.groupsPublished });
 }

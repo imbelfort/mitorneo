@@ -104,6 +104,8 @@ type TournamentPublicData = {
   registrationDeadline?: string | null;
   rulesText?: string | null;
   playDays: string[];
+  schedulePublished?: boolean;
+  groupsPublished?: boolean;
   sport?: { id: string; name: string } | null;
   league?: { id: string; name: string; photoUrl?: string | null } | null;
   owner?: { name?: string | null; email?: string | null } | null;
@@ -290,6 +292,29 @@ export default function TournamentPublic({
   const [matches, setMatches] = useState<Match[]>(tournament.matches);
   const [matchesError, setMatchesError] = useState<string | null>(null);
   const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set());
+  const schedulePublished = Boolean(tournament.schedulePublished);
+  const groupsPublished = Boolean(tournament.groupsPublished);
+  const visibleTabs = useMemo(
+    () =>
+      TABS.filter((item) => {
+        if (!schedulePublished && item.key === "fixture") return false;
+        if (!groupsPublished && item.key === "groups") return false;
+        if (!groupsPublished && item.key === "standings") return false;
+        return true;
+      }),
+    [schedulePublished, groupsPublished]
+  );
+
+  useEffect(() => {
+    if (schedulePublished && groupsPublished) return;
+    if (!schedulePublished && tab === "fixture") {
+      setTab("info");
+      return;
+    }
+    if (!groupsPublished && (tab === "groups" || tab === "standings")) {
+      setTab("info");
+    }
+  }, [schedulePublished, groupsPublished, tab]);
 
   useEffect(() => {
     const liveTabs: TabKey[] = ["fixture", "results", "bracket", "positions"];
@@ -780,7 +805,7 @@ export default function TournamentPublic({
 
       <div className="mx-auto w-full max-w-6xl px-6 py-8">
         <div className="flex flex-wrap gap-2">
-          {TABS.map((item) => (
+          {visibleTabs.map((item) => (
             <button
               key={item.key}
               type="button"
@@ -1000,7 +1025,7 @@ export default function TournamentPublic({
                     </div>
                   </div>
 
-                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
                     {entry.groups.map((group) => (
                       <div
                         key={`group-table-${entry.category.id}-${group.key}`}
@@ -1224,75 +1249,84 @@ export default function TournamentPublic({
                       </p>
                     </div>
                   </div>
-                  <div className="mt-4 grid gap-4 md:grid-cols-2">
-                    {entry.groups.map((group) => (
-                      <div
-                        key={`standings-${entry.category.id}-${group.key}`}
-                        className="overflow-hidden rounded-2xl border border-white/10 bg-white/10"
-                      >
-                        <div className="bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">
-                          Grupo {group.key}
-                        </div>
-                        <table className="min-w-full text-[11px] text-slate-200">
-                          <thead className="bg-white/5 uppercase tracking-[0.2em] text-slate-300">
-                            <tr>
-                              <th className="px-3 py-2 text-left">Pos</th>
-                              <th className="px-3 py-2 text-left">Jugador/Equipo</th>
-                              <th className="px-3 py-2 text-left">PJ</th>
-                              <th className="px-3 py-2 text-left">PG</th>
-                              <th className="px-3 py-2 text-left">PP</th>
-                              <th className="px-3 py-2 text-left">Sets</th>
-                              <th className="px-3 py-2 text-left">DS</th>
-                              <th className="px-3 py-2 text-left">PF</th>
-                              <th className="px-3 py-2 text-left">PC</th>
-                              <th className="px-3 py-2 text-left">DP</th>
-                              <th className="px-3 py-2 text-left">Pts</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-white/5">
-                            {group.entries.map((entryItem, index) => {
-                              const registration = registrationById.get(entryItem.id);
-                              const setsDiff =
-                                entryItem.setsWon - entryItem.setsLost;
-                              const pointsDiff =
-                                entryItem.pointsWon - entryItem.pointsLost;
-                              return (
-                                <tr key={entryItem.id}>
-                                  <td className="px-3 py-2 text-cyan-200">
-                                    {index + 1}
-                                  </td>
-                                  <td className="px-3 py-2 font-semibold text-white">
-                                    {registration ? teamLabel(registration) : "N/D"}
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    {entryItem.matchesWon + entryItem.matchesLost}
-                                  </td>
-                                  <td className="px-3 py-2">{entryItem.matchesWon}</td>
-                                  <td className="px-3 py-2">{entryItem.matchesLost}</td>
-                                  <td className="px-3 py-2">
-                                    {entryItem.setsWon}-{entryItem.setsLost}
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    {setsDiff}
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    {entryItem.pointsWon}
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    {entryItem.pointsLost}
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    {pointsDiff}
-                                  </td>
-                                  <td className="px-3 py-2">{entryItem.points}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    ))}
+                  <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-3 text-[11px] text-slate-300">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">
+                      Significado de columnas
+                    </p>
+                    <div className="mt-2 grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+                      <p>PJ: Partidos jugados</p>
+                      <p>PG: Partidos ganados</p>
+                      <p>PP: Partidos perdidos</p>
+                      <p>Pts: Puntos por partido</p>
+                      <p>SG: Sets ganados</p>
+                      <p>SP: Sets perdidos</p>
+                      <p>DS: Diferencia de sets</p>
+                      <p>PF: Puntos a favor</p>
+                      <p>PC: Puntos en contra</p>
+                      <p>DP: Diferencia de puntos</p>
+                    </div>
                   </div>
+                    <div className="mt-4 space-y-4">
+                    {entry.groups.map((group) => (
+                        <div
+                          key={`standings-${entry.category.id}-${group.key}`}
+                          className="rounded-2xl border border-white/10 bg-white/10"
+                        >
+                          <div className="bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">
+                            Grupo {group.key}
+                          </div>
+                          <table className="w-full text-[11px] text-slate-200">
+                            <thead className="bg-white/5 uppercase tracking-[0.2em] text-slate-300">
+                              <tr>
+                                <th className="px-3 py-2 text-left">Pos</th>
+                                <th className="px-3 py-2 text-left">Jugador/Equipo</th>
+                                <th className="px-3 py-2 text-left">PJ</th>
+                                <th className="px-3 py-2 text-left">PG</th>
+                                <th className="px-3 py-2 text-left">PP</th>
+                                <th className="px-3 py-2 text-left">Pts</th>
+                                <th className="px-3 py-2 text-left">SG</th>
+                                <th className="px-3 py-2 text-left">SP</th>
+                                <th className="px-3 py-2 text-left">DS</th>
+                                <th className="px-3 py-2 text-left">PF</th>
+                                <th className="px-3 py-2 text-left">PC</th>
+                                <th className="px-3 py-2 text-left">DP</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5">
+                              {group.entries.map((entryItem, index) => {
+                                const registration = registrationById.get(entryItem.id);
+                                const setsDiff =
+                                  entryItem.setsWon - entryItem.setsLost;
+                                const pointsDiff =
+                                  entryItem.pointsWon - entryItem.pointsLost;
+                                return (
+                                  <tr key={entryItem.id}>
+                                    <td className="px-3 py-2 text-cyan-200">
+                                      {index + 1}
+                                    </td>
+                                    <td className="px-3 py-2 font-semibold text-white">
+                                      {registration ? teamLabel(registration) : "N/D"}
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      {entryItem.matchesWon + entryItem.matchesLost}
+                                    </td>
+                                    <td className="px-3 py-2">{entryItem.matchesWon}</td>
+                                    <td className="px-3 py-2">{entryItem.matchesLost}</td>
+                                    <td className="px-3 py-2">{entryItem.points}</td>
+                                    <td className="px-3 py-2">{entryItem.setsWon}</td>
+                                    <td className="px-3 py-2">{entryItem.setsLost}</td>
+                                    <td className="px-3 py-2">{setsDiff}</td>
+                                    <td className="px-3 py-2">{entryItem.pointsWon}</td>
+                                    <td className="px-3 py-2">{entryItem.pointsLost}</td>
+                                    <td className="px-3 py-2">{pointsDiff}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      ))}
+                    </div>
                   {entry.groups.length === 1 && entry.groups[0].entries.length > 0 && (
                     <div className="mt-5 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4 text-xs text-slate-200">
                       <p className="text-[11px] uppercase tracking-[0.2em] text-cyan-200">

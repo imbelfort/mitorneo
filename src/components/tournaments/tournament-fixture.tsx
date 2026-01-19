@@ -55,6 +55,7 @@ type FixtureResponse = {
   matches?: Match[];
   groupQualifiers?: GroupQualifier[];
   tournamentStatus?: "WAITING" | "ACTIVE" | "FINISHED";
+  groupsPublished?: boolean;
   paymentRate?: string;
   sessionRole?: "ADMIN" | "TOURNAMENT_ADMIN";
 };
@@ -105,6 +106,8 @@ export default function TournamentFixture({ tournamentId, tournamentName }: Prop
   const [sessionRole, setSessionRole] = useState<
     "ADMIN" | "TOURNAMENT_ADMIN"
   >("TOURNAMENT_ADMIN");
+  const [groupsPublished, setGroupsPublished] = useState(false);
+  const [publishingGroups, setPublishingGroups] = useState(false);
   const [paymentQrUrl, setPaymentQrUrl] = useState<string | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
@@ -170,6 +173,7 @@ export default function TournamentFixture({ tournamentId, tournamentName }: Prop
     if (data.sessionRole) {
       setSessionRole(data.sessionRole);
     }
+    setGroupsPublished(Boolean(data.groupsPublished));
   };
 
   useEffect(() => {
@@ -299,6 +303,33 @@ export default function TournamentFixture({ tournamentId, tournamentName }: Prop
       setError(detail ?? "No se pudo generar el fixture");
     } finally {
       setGeneratingAll(false);
+    }
+  };
+
+  const handleToggleGroupsPublish = async () => {
+    if (publishingGroups) return;
+    setPublishingGroups(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/tournaments/${tournamentId}/draws`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ groupsPublished: !groupsPublished }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const detail = data?.error ? ` (${data.error})` : "";
+        throw new Error(`No se pudo actualizar${detail}`);
+      }
+      setGroupsPublished(Boolean(data.groupsPublished));
+      setMessage(!groupsPublished ? "Sembrado publicado" : "Sembrado oculto");
+    } catch (error: unknown) {
+      const detail = error instanceof Error ? error.message : undefined;
+      setError(detail ?? "No se pudo actualizar");
+    } finally {
+      setPublishingGroups(false);
     }
   };
 
@@ -496,6 +527,23 @@ export default function TournamentFixture({ tournamentId, tournamentName }: Prop
             >
               {generatingAll ? "Generando..." : "Generar fixture"}
             </button>
+            <div className="flex items-center gap-2">
+              <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600">
+                {groupsPublished ? "Sembrado publicado" : "Sembrado oculto"}
+              </span>
+              <button
+                type="button"
+                onClick={handleToggleGroupsPublish}
+                disabled={publishingGroups}
+                className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {publishingGroups
+                  ? "Actualizando..."
+                  : groupsPublished
+                  ? "Ocultar"
+                  : "Publicar"}
+              </button>
+            </div>
             {tournamentStatus === "WAITING" && (
               <button
                 type="button"

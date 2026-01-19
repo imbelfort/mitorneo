@@ -68,6 +68,7 @@ export async function GET(
       playDays: true,
       status: true,
       paymentRate: true,
+      groupsPublished: true,
     },
   });
 
@@ -194,6 +195,7 @@ export async function GET(
   return NextResponse.json({
     tournamentStatus: tournament.status,
     paymentRate: tournament.paymentRate.toString(),
+    groupsPublished: tournament.groupsPublished,
     sessionRole: session.user.role,
     playDays,
     groupPoints: {
