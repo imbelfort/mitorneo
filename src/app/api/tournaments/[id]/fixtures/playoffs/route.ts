@@ -158,9 +158,11 @@ const buildGroupStandings = (
   });
 
   matches.forEach((match) => {
-    if (!match.teamAId || !match.teamBId) return;
-    const teamA = standings.get(match.teamAId);
-    const teamB = standings.get(match.teamBId);
+    const teamAId = match.teamAId;
+    const teamBId = match.teamBId;
+    if (!teamAId || !teamBId) return;
+    const teamA = standings.get(teamAId);
+    const teamB = standings.get(teamBId);
     if (!teamA || !teamB) return;
 
     if (match.outcomeType !== "PLAYED") {
