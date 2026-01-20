@@ -61,7 +61,7 @@ const isPlaceholderValue = (value?: string | null) => {
 
 type PlayoffMatchSlot = {
   id: string;
-  roundNumber: number;
+  roundNumber: number | null;
   teamAId: string | null;
   teamBId: string | null;
   createdAt: Date;
@@ -211,9 +211,9 @@ const propagateWinnerToNextMatch = async (args: {
 
 const resolveIds = (
   request: Request,
-  params?: { id?: string; matchId?: string }
+  resolvedParams?: { id?: string; matchId?: string }
 ) => {
-  if (resolvedParams?.id && params?.matchId) {
+  if (resolvedParams?.id && resolvedParams?.matchId) {
     return { tournamentId: resolvedParams.id, matchId: resolvedParams.matchId };
   }
   const url = new URL(request.url);
@@ -221,9 +221,9 @@ const resolveIds = (
   const matchesIndex = parts.indexOf("matches");
   return {
     tournamentId:
-      params?.id ?? (matchesIndex > 0 ? parts[matchesIndex - 2] : undefined),
+      resolvedParams?.id ?? (matchesIndex > 0 ? parts[matchesIndex - 2] : undefined),
     matchId:
-      params?.matchId ?? (matchesIndex >= 0 ? parts[matchesIndex + 1] : undefined),
+      resolvedParams?.matchId ?? (matchesIndex >= 0 ? parts[matchesIndex + 1] : undefined),
   };
 };
 

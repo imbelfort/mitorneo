@@ -158,6 +158,7 @@ const buildGroupStandings = (
   });
 
   matches.forEach((match) => {
+    if (!match.teamAId || !match.teamBId) return;
     const teamA = standings.get(match.teamAId);
     const teamB = standings.get(match.teamBId);
     if (!teamA || !teamB) return;

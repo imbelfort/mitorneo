@@ -129,9 +129,9 @@ const registrationInclude = {
 
 const resolveIds = (
   request: Request,
-  params?: { id?: string; registrationId?: string }
+  resolvedParams?: { id?: string; registrationId?: string }
 ) => {
-  if (resolvedParams?.id && params?.registrationId) {
+  if (resolvedParams?.id && resolvedParams?.registrationId) {
     return { tournamentId: resolvedParams.id, registrationId: resolvedParams.registrationId };
   }
 
@@ -141,10 +141,10 @@ const resolveIds = (
 
   return {
     tournamentId:
-      params?.id ??
+      resolvedParams?.id ??
       (registrationsIndex > 0 ? parts[registrationsIndex - 1] : undefined),
     registrationId:
-      params?.registrationId ??
+      resolvedParams?.registrationId ??
       (registrationsIndex >= 0 ? parts[registrationsIndex + 1] : undefined),
   };
 };

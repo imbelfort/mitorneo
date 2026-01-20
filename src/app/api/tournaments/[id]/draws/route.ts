@@ -10,8 +10,8 @@ type DrawEntryInput = {
   groupMaxSize?: unknown;
 };
 
-const DRAW_TYPES = new Set(["ROUND_ROBIN", "GROUPS_PLAYOFF", "PLAYOFF"]);
-const GROUP_DRAW_TYPES = new Set(["ROUND_ROBIN", "GROUPS_PLAYOFF"]);
+  const DRAW_TYPES = new Set(["ROUND_ROBIN", "GROUPS_PLAYOFF", "PLAYOFF"]);
+  const GROUP_DRAW_TYPES = new Set(["ROUND_ROBIN", "GROUPS_PLAYOFF"]);
 
 const resolveId = (request: Request, resolvedParams?: { id?: string }) => {
   if (resolvedParams?.id) return resolvedParams.id;
@@ -159,7 +159,7 @@ export async function PUT(
 
   const normalizedEntries: {
     categoryId: string;
-    drawType: string;
+    drawType: "ROUND_ROBIN" | "GROUPS_PLAYOFF" | "PLAYOFF";
     groupMinSize: number | null;
     groupMaxSize: number | null;
   }[] = [];
@@ -208,7 +208,7 @@ export async function PUT(
 
     normalizedEntries.push({
       categoryId,
-      drawType,
+      drawType: drawType as "ROUND_ROBIN" | "GROUPS_PLAYOFF" | "PLAYOFF",
       groupMinSize,
       groupMaxSize,
     });

@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
 const resolveIds = (request: Request, resolvedParams?: { id?: string; categoryId?: string }) => {
-  if (resolvedParams?.id && params?.categoryId) {
+  if (resolvedParams?.id && resolvedParams?.categoryId) {
     return { tournamentId: resolvedParams.id, categoryId: resolvedParams.categoryId };
   }
   const url = new URL(request.url);
