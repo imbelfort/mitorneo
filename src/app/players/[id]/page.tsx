@@ -38,6 +38,7 @@ type PlayerStats = {
   matchesLost: number;
   doubles: number;
   triples: number;
+  hasFrontonMatch: boolean;
 };
 
 type LeagueRanking = {
@@ -108,6 +109,7 @@ export default function PlayerProfilePage() {
     matchesLost: 0,
     doubles: 0,
     triples: 0,
+    hasFrontonMatch: false,
   });
   const [error, setError] = useState<string | null>(null);
   const [rankings, setRankings] = useState<LeagueRanking[]>([]);
@@ -146,6 +148,7 @@ export default function PlayerProfilePage() {
           matchesLost: Number(data.stats.matchesLost ?? 0),
           doubles: Number(data.stats.doubles ?? 0),
           triples: Number(data.stats.triples ?? 0),
+          hasFrontonMatch: Boolean(data.stats.hasFrontonMatch),
         });
       } else {
         setStats({
@@ -154,6 +157,7 @@ export default function PlayerProfilePage() {
           matchesLost: 0,
           doubles: 0,
           triples: 0,
+          hasFrontonMatch: false,
         });
       }
       setState("ready");
@@ -228,9 +232,13 @@ export default function PlayerProfilePage() {
     { label: "Partidos jugados", value: stats.matchesPlayed },
     { label: "Partidos ganados", value: stats.matchesWon },
     { label: "Partidos perdidos", value: stats.matchesLost },
-    { label: "Dobles (Fronton)", value: stats.doubles },
-    { label: "Triples (Fronton)", value: stats.triples },
   ];
+  if (stats.hasFrontonMatch) {
+    statsCards.push(
+      { label: "Dobles (Fronton)", value: stats.doubles },
+      { label: "Triples (Fronton)", value: stats.triples }
+    );
+  }
 
   return (
     <main
@@ -257,11 +265,6 @@ export default function PlayerProfilePage() {
               <span className="rounded-full bg-indigo-100 px-3 py-1 font-semibold text-indigo-700">
                 {genderLabel}
               </span>
-              {player.phone && (
-                <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-700">
-                  {player.phone}
-                </span>
-              )}
             </div>
           </div>
 
@@ -390,7 +393,7 @@ export default function PlayerProfilePage() {
                         Categoria: {entry.categoryName} ({entry.categoryAbbreviation})
                       </p>
                     </div>
-                    <div className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
+                    <div className="rounded-full bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-700">
                       #{entry.position ?? "-"}
                     </div>
                   </div>

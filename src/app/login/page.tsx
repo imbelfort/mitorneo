@@ -6,9 +6,6 @@ import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useState } from "react";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();

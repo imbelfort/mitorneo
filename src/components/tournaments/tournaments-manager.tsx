@@ -309,6 +309,7 @@ export default function TournamentsManager({
       Quill.register(Size, true);
 
       const host = rulesEditorRef.current;
+      if (!host) return;
       host.innerHTML = "";
       const container = document.createElement("div");
       host.appendChild(container);

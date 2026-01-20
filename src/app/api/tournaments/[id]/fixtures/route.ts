@@ -25,6 +25,13 @@ const toDateOnly = (value?: Date | string | null) => {
   return parsed.toISOString().split("T")[0];
 };
 
+const toISOStringOrNull = (value?: Date | string | null) => {
+  if (!value) return null;
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
+};
+
 const normalizeTiebreakerOrder = (value: unknown) => {
   if (!Array.isArray(value)) return [...DEFAULT_TIEBREAKERS];
   const list = value.filter(
@@ -235,7 +242,7 @@ export async function GET(
       groupName: registration.groupName,
       seed: registration.seed,
       rankingNumber: registration.rankingNumber,
-      createdAt: registration.createdAt.toISOString(),
+      createdAt: toISOStringOrNull(registration.createdAt),
       player: registration.player,
       partner: registration.partner,
       partnerTwo: registration.partnerTwo,

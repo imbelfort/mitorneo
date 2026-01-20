@@ -47,6 +47,7 @@ export async function GET(
   let matchesLost = 0;
   let doubles = 0;
   let triples = 0;
+  let hasFrontonMatch = false;
 
   if (registrations.length > 0) {
     const registrationIds = registrations.map((registration) => registration.id);
@@ -65,6 +66,11 @@ export async function GET(
         outcomeSide: true,
         games: true,
         liveState: true,
+        category: {
+          select: {
+            sport: { select: { name: true } },
+          },
+        },
       },
     });
 
@@ -96,6 +102,10 @@ export async function GET(
 
     matches.forEach((match) => {
       if (!match.teamAId || !match.teamBId) return;
+      const sportName = match.category?.sport?.name ?? "";
+      if (sportName.toLowerCase().includes("fronton")) {
+        hasFrontonMatch = true;
+      }
       const winner = resolveWinner(match);
       if (!winner) return;
       const isTeamA = registrationIds.includes(match.teamAId);
@@ -125,7 +135,14 @@ export async function GET(
 
   return NextResponse.json({
     player,
-    stats: { matchesPlayed, matchesWon, matchesLost, doubles, triples },
+    stats: {
+      matchesPlayed,
+      matchesWon,
+      matchesLost,
+      doubles,
+      triples,
+      hasFrontonMatch,
+    },
   });
 }
 
