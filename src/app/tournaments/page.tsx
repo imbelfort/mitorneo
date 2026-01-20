@@ -159,57 +159,60 @@ export default async function TournamentsPage({
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                        {filteredTournaments.map((tournament) => (
-                            <Link
-                                key={tournament.id}
-                                href={`/tournaments/${tournament.id}`}
-                                className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-lg hover:-translate-y-1"
-                            >
-                                <div className="relative h-48 w-full bg-slate-100">
-                                    <Image
-                                        src={
-                                            tournament.photoUrl ||
-                                            tournament.league?.photoUrl ||
-                                            pickFallbackPhoto(tournament.id)
-                                        }
-                                        alt={tournament.name}
-                                        fill
-                                        className="object-cover transition-transform duration-500 group-hover:scale-105"
-                                    />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 to-transparent opacity-60" />
-                                    <div className="absolute bottom-4 left-4 right-4">
-                                        <span className="inline-block rounded-full bg-indigo-600 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-white">
-                                            {tournament.sport?.name || "Deporte"}
-                                        </span>
-                                    </div>
-                                </div>
+                        {filteredTournaments.map((tournament) => {
+                            const imageUrl =
+                                tournament.photoUrl ||
+                                tournament.league?.photoUrl ||
+                                pickFallbackPhoto(tournament.id);
 
-                                <div className="flex flex-1 flex-col p-6">
-                                    <h3 className="mb-2 text-xl font-bold text-slate-900 line-clamp-2">
-                                        {tournament.name}
-                                    </h3>
-
-                                    <div className="mt-auto space-y-3 text-sm text-slate-500">
-                                        <div className="flex items-center gap-2">
-                                            <Calendar className="h-4 w-4 text-indigo-500" />
-                                            <span>
-                                                {tournament.startDate
-                                                    ? formatDate(tournament.startDate)
-                                                    : "Fecha por definir"}
+                            return (
+                                <Link
+                                    key={tournament.id}
+                                    href={`/tournaments/${tournament.id}`}
+                                    className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-lg hover:-translate-y-1"
+                                >
+                                    <div className="relative h-48 w-full bg-slate-100">
+                                        <Image
+                                            src={imageUrl}
+                                            alt={tournament.name}
+                                            fill
+                                            className="object-cover transition-transform duration-500 group-hover:scale-105"
+                                        />
+                                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 to-transparent opacity-60" />
+                                        <div className="absolute bottom-4 left-4 right-4">
+                                            <span className="inline-block rounded-full bg-indigo-600 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-white">
+                                                {tournament.sport?.name || "Deporte"}
                                             </span>
                                         </div>
-                                        {tournament.clubs.length > 0 && (
+                                    </div>
+
+                                    <div className="flex flex-1 flex-col p-6">
+                                        <h3 className="mb-2 text-xl font-bold text-slate-900 line-clamp-2">
+                                            {tournament.name}
+                                        </h3>
+
+                                        <div className="mt-auto space-y-3 text-sm text-slate-500">
                                             <div className="flex items-center gap-2">
-                                                <MapPin className="h-4 w-4 text-indigo-500" />
-                                                <span className="line-clamp-1">
-                                                    {tournament.clubs[0].name}
+                                                <Calendar className="h-4 w-4 text-indigo-500" />
+                                                <span>
+                                                    {tournament.startDate
+                                                        ? formatDate(tournament.startDate)
+                                                        : "Fecha por definir"}
                                                 </span>
                                             </div>
-                                        )}
+                                            {tournament.clubs.length > 0 && (
+                                                <div className="flex items-center gap-2">
+                                                    <MapPin className="h-4 w-4 text-indigo-500" />
+                                                    <span className="line-clamp-1">
+                                                        {tournament.clubs[0].name}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
-                            </Link>
-                        ))}
+                                </Link>
+                            );
+                        })}
                     </div>
                 )}
             </div>
