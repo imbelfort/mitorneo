@@ -4,10 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "cross-env NEXT_TURBOPACK_USE_WORKER=0 next build",
-    "start": "next start",
+    "build": "next build",
+    "start": "node scripts/start-prod.js",
     "lint": "eslint",
     "postinstall": "prisma generate",
+    "migrate:deploy": "prisma migrate deploy",
     "prisma:generate": "prisma generate",
     "db:setup": "prisma db push && node prisma/seed.js",
     "db:seed": "node prisma/seed.js",
@@ -33,7 +34,6 @@
     "react-dom": "19.2.3"
   },
   "devDependencies": {
-    "cross-env": "^7.0.3",
     "@types/bcryptjs": "^3.0.0",
     "@types/node": "^20",
     "@types/pdfkit": "^0.17.4",
