@@ -1,9 +1,8 @@
-import { authOptions } from "@/lib/auth";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
 export default async function TournamentStepOnePage() {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession();
 
   if (
     !session ||
@@ -14,3 +13,4 @@ export default async function TournamentStepOnePage() {
 
   redirect("/admin/tournaments");
 }
+

@@ -1,10 +1,9 @@
-import { authOptions } from "@/lib/auth";
 import type { Metadata } from "next";
-import { getServerSession } from "next-auth";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
 import HeaderBar from "@/components/layout/header-bar";
+import { getAuthUser } from "@/lib/auth";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -69,7 +68,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const session = await getServerSession(authOptions);
+  const user = await getAuthUser();
 
   return (
     <html lang="es" suppressHydrationWarning>
@@ -77,7 +76,7 @@ export default async function RootLayout({
         suppressHydrationWarning
         className={`${geistSans.variable} ${geistMono.variable} bg-[var(--background)] text-[var(--foreground)] antialiased overflow-x-hidden`}
       >
-        <Providers session={session}>
+        <Providers initialUser={user}>
           <HeaderBar />
           <div className="flex min-h-screen flex-col">
             <div className="flex-1">{children}</div>

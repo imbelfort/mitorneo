@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useState } from "react";
+import { useAuth } from "@/app/providers";
 
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") ?? "/";
+  const { login } = useAuth();
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -23,16 +24,11 @@ export default function LoginPage() {
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
 
-    const result = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-      callbackUrl,
-    });
+    const result = await login(email, password);
 
     setLoading(false);
 
-    if (result?.error) {
+    if (!result.ok) {
       setError("Correo o contrasena incorrectos");
       return;
     }

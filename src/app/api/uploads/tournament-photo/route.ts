@@ -1,5 +1,4 @@
-import { authOptions } from "@/lib/auth";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
@@ -8,7 +7,7 @@ import crypto from "crypto";
 const MAX_SIZE_BYTES = 2 * 1024 * 1024;
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession();
   if (
     !session?.user ||
     (session.user.role !== "ADMIN" && session.user.role !== "TOURNAMENT_ADMIN")

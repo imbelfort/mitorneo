@@ -1,6 +1,5 @@
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { GET as getFixturePdf } from "./pdf/route";
 
@@ -55,7 +54,7 @@ export async function GET(
   if (url.searchParams.get("format") === "pdf") {
     return getFixturePdf(request, { params });
   }
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession();
   if (
     !session?.user ||
     (session.user.role !== "ADMIN" && session.user.role !== "TOURNAMENT_ADMIN")

@@ -1,5 +1,4 @@
-import { authOptions } from "@/lib/auth";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "@/lib/auth";
 import Link from "next/link";
 import {
   Trophy,
@@ -26,7 +25,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function Home() {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession();
 
   // Fetch the 3 most recent tournaments
   const activeTournaments = await prisma.tournament.findMany({
@@ -306,7 +305,7 @@ export default async function Home() {
         </div>
       </section>
 
-
     </main>
   );
 }
+

@@ -1,11 +1,10 @@
 import { prisma } from "@/lib/prisma";
-import { authOptions } from "@/lib/auth";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import SportsManager from "@/components/sports/sports-manager";
 
 export default async function SportsAdminPage() {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession();
   const hasSession = Boolean(session);
 
   if (!session || session.user.role !== "ADMIN") {
@@ -59,3 +58,4 @@ export default async function SportsAdminPage() {
     </main>
   );
 }
+

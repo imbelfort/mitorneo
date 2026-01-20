@@ -1,18 +1,14 @@
 "use client";
 
-import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Session } from "next-auth";
 import { FormEvent, useState } from "react";
 import SignOutButton from "./sign-out-button";
-
-type AuthPanelProps = {
-  session: Session | null;
-};
+import { useAuth } from "@/app/providers";
 
 type Mode = "signup" | "signin";
 
-export default function AuthPanel({ session }: AuthPanelProps) {
+export default function AuthPanel() {
+  const { user, login } = useAuth();
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("signup");
   const [loading, setLoading] = useState(false);
@@ -60,16 +56,11 @@ export default function AuthPanel({ session }: AuthPanelProps) {
         return;
       }
 
-      const signInResult = await signIn("credentials", {
-        email: form.email.trim(),
-        password: form.password,
-        redirect: false,
-        callbackUrl: "/",
-      });
+      const signInResult = await login(form.email.trim(), form.password);
 
       setLoading(false);
 
-      if (signInResult?.error) {
+      if (!signInResult.ok) {
         setMessage("Cuenta creada. Inicia sesion con tus credenciales.");
         return;
       }
@@ -79,16 +70,11 @@ export default function AuthPanel({ session }: AuthPanelProps) {
       return;
     }
 
-    const result = await signIn("credentials", {
-      email: form.email.trim(),
-      password: form.password,
-      redirect: false,
-      callbackUrl: "/",
-    });
+    const result = await login(form.email.trim(), form.password);
 
     setLoading(false);
 
-    if (result?.error) {
+    if (!result.ok) {
       setError("Correo o contrasena incorrectos");
       return;
     }
@@ -97,7 +83,7 @@ export default function AuthPanel({ session }: AuthPanelProps) {
     router.refresh();
   };
 
-  if (session) {
+  if (user) {
     return (
       <div className="admin-fade-up relative h-full overflow-hidden rounded-[28px] bg-white/80 p-8 shadow-[0_30px_70px_-55px_rgba(15,23,42,0.5)] ring-1 ring-slate-200/70 backdrop-blur">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-indigo-400/70 to-transparent" />
@@ -105,11 +91,11 @@ export default function AuthPanel({ session }: AuthPanelProps) {
           Sesion activa
         </span>
         <h3 className="mt-3 text-2xl font-semibold text-slate-900">
-          Hola, {session.user?.name ?? "Usuario"}
+          Hola, {user.name ?? "Usuario"}
         </h3>
-        <p className="mt-1 text-sm text-slate-600">{session.user?.email}</p>
+        <p className="mt-1 text-sm text-slate-600">{user.email}</p>
         <p className="mt-3 inline-flex rounded-full bg-slate-100/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-600">
-          Rol: {session.user?.role === "ADMIN" ? "Administrador" : "Administrador de torneo"}
+          Rol: {user.role === "ADMIN" ? "Administrador" : "Administrador de torneo"}
         </p>
         <div className="mt-6">
           <SignOutButton />

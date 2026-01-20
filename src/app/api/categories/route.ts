@@ -1,7 +1,6 @@
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { CategoryGender, CategoryModality } from "@prisma/client";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
 const isValidEnum = <T extends string>(value: string, allowed: T[]): value is T =>
@@ -14,7 +13,7 @@ const isRacquetballName = (name: string | null | undefined) => {
 };
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession();
   if (
     !session?.user ||
     (session.user.role !== "ADMIN" && session.user.role !== "TOURNAMENT_ADMIN")
@@ -43,7 +42,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession();
   if (
     !session?.user ||
     (session.user.role !== "ADMIN" && session.user.role !== "TOURNAMENT_ADMIN")

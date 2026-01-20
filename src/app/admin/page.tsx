@@ -1,4 +1,3 @@
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
     ArrowRight,
@@ -8,12 +7,12 @@ import {
     Trophy,
     Users
 } from "lucide-react";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "@/lib/auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 export default async function AdminDashboard() {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession();
 
     if (!session?.user) {
         redirect("/login");
@@ -285,3 +284,4 @@ export default async function AdminDashboard() {
         </main>
     );
 }
+

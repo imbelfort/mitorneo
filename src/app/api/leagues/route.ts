@@ -1,10 +1,9 @@
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession();
   if (
     !session?.user ||
     (session.user.role !== "ADMIN" && session.user.role !== "TOURNAMENT_ADMIN")
@@ -26,7 +25,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession();
   if (!session?.user || (session.user.role !== "ADMIN" && session.user.role !== "TOURNAMENT_ADMIN")) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }

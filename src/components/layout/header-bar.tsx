@@ -2,25 +2,27 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { signOut, useSession } from "next-auth/react";
 import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import ThemeToggle from "./theme-toggle";
+import { useAuth } from "@/app/providers";
 
 export default function HeaderBar() {
-  const { data: session, status } = useSession();
+  const { user, loading, logout } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
 
   const handleSignOut = async () => {
     setLoggingOut(true);
-    await signOut({ callbackUrl: "/login" });
+    await logout();
+    router.push("/login");
+    router.refresh();
   };
 
   const roleLabel =
-    session?.user?.role === "ADMIN"
+    user?.role === "ADMIN"
       ? "Administrador"
       : "Administrador de torneo";
 
@@ -40,9 +42,9 @@ export default function HeaderBar() {
           </Link>
           <div className="flex items-center gap-3">
             <ThemeToggle className="border-[var(--border)] bg-[var(--surface-2)] text-[var(--foreground)] hover:bg-[var(--surface)]" />
-            {status === "loading" ? (
+            {loading ? (
               <span className="text-xs text-slate-400">Cargando...</span>
-            ) : session ? (
+            ) : user ? (
               <>
                 <span className="hidden rounded-full bg-[var(--surface-2)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500 md:inline-flex">
                   {roleLabel}
@@ -115,16 +117,16 @@ export default function HeaderBar() {
 
         <div className="flex items-center gap-3">
           <ThemeToggle className="border-[var(--border)] bg-[var(--surface-2)] text-[var(--foreground)] hover:bg-[var(--surface)]" />
-          {status === "loading" ? (
+          {loading ? (
             <span className="text-xs text-slate-500">Cargando...</span>
-          ) : session ? (
+          ) : user ? (
             <>
               <div className="hidden flex-col text-right sm:flex">
                 <span className="text-xs font-semibold text-slate-700">
-                  {session.user?.name ?? "Usuario"}
+                  {user.name ?? "Usuario"}
                 </span>
                 <span className="text-[11px] text-slate-500">
-                  {session.user?.email}
+                  {user.email}
                 </span>
               </div>
               <span className="hidden rounded-full bg-slate-100/80 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-600 md:inline-flex">

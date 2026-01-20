@@ -2,13 +2,12 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import LeaguesManager from "@/components/leagues/leagues-manager";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
 export default async function LeaguesAdminPage() {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession();
   const hasSession = Boolean(session);
 
   if (
@@ -72,4 +71,5 @@ export default async function LeaguesAdminPage() {
     </main>
   );
 }
+
 

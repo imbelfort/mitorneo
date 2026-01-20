@@ -1,6 +1,5 @@
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "@/lib/auth";
 import {
   computePlayerPointsByCategory,
   type TournamentRankingData,
@@ -39,7 +38,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const resolvedParams = await params;
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession();
   if (!session?.user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }

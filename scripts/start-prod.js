@@ -19,6 +19,7 @@ if (migrateResult.status !== 0) {
 }
 
 const port = process.env.PORT || "3000";
+const hostname = process.env.HOSTNAME || "0.0.0.0";
 const standaloneServer = path.join(
   process.cwd(),
   ".next",
@@ -28,14 +29,18 @@ const standaloneServer = path.join(
 
 const nextArgs = existsSync(standaloneServer)
   ? [standaloneServer]
-  : ["node_modules/next/dist/bin/next", "start", "-p", port];
+  : ["node_modules/next/dist/bin/next", "start", "-H", hostname, "-p", port];
 
 const command = "node";
 const args = nextArgs;
 
 const child = spawn(command, args, {
   stdio: "inherit",
-  env: process.env,
+  env: {
+    ...process.env,
+    HOSTNAME: hostname,
+    PORT: port,
+  },
 });
 
 child.on("exit", (code) => {

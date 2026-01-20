@@ -1,8 +1,7 @@
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Role } from "@prisma/client";
 import { hash } from "bcryptjs";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
 type RouteParams = {
@@ -11,7 +10,7 @@ type RouteParams = {
 
 export async function PATCH(request: Request, { params }: RouteParams) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession();
     if (!session || session.user.role !== "ADMIN") {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
@@ -94,7 +93,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
 export async function DELETE(_request: Request, { params }: RouteParams) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession();
     if (!session || session.user.role !== "ADMIN") {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }

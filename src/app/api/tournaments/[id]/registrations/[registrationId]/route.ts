@@ -1,6 +1,5 @@
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
 const parsePriceValue = (value: unknown) => {
@@ -154,7 +153,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string; registrationId: string }> }
 ) {
   const resolvedParams = await params;
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession();
   if (
     !session?.user ||
     (session.user.role !== "ADMIN" && session.user.role !== "TOURNAMENT_ADMIN")
@@ -437,7 +436,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; registrationId: string }> }
 ) {
   const resolvedParams = await params;
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession();
   if (
     !session?.user ||
     (session.user.role !== "ADMIN" && session.user.role !== "TOURNAMENT_ADMIN")

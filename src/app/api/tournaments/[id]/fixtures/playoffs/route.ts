@@ -1,6 +1,5 @@
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
 const DEFAULT_TIEBREAKERS = [
@@ -368,7 +367,6 @@ const collectOrderedGroupQualifiers = (
   return qualifiers.map((item) => item.entry);
 };
 
-
 const orderRegistrations = (
   items: Array<{
     id: string;
@@ -397,7 +395,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const resolvedParams = await params;
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession();
   if (
     !session?.user ||
     (session.user.role !== "ADMIN" && session.user.role !== "TOURNAMENT_ADMIN")

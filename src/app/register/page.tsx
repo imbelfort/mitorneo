@@ -5,10 +5,11 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
-import { signIn } from "next-auth/react";
+import { useAuth } from "@/app/providers";
 
 export default function RegisterPage() {
     const router = useRouter();
+    const { login } = useAuth();
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
@@ -45,14 +46,9 @@ export default function RegisterPage() {
             }
 
             // 2. Iniciar sesión automáticamente
-            const signInResult = await signIn("credentials", {
-                email: email.trim(),
-                password,
-                redirect: false,
-                callbackUrl: "/admin",
-            });
+            const signInResult = await login(email.trim(), password);
 
-            if (signInResult?.error) {
+            if (!signInResult.ok) {
                 // Si el login falla pero el registro fue exitoso (raro), mandamos al login
                 router.push("/login?message=Cuenta creada exitosamente");
                 return;
