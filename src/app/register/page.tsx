@@ -7,6 +7,9 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { signIn } from "next-auth/react";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default function RegisterPage() {
     const router = useRouter();
     const [error, setError] = useState<string | null>(null);
