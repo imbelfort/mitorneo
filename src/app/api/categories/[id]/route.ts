@@ -4,8 +4,8 @@ import { CategoryGender, CategoryModality } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
-const resolveId = (request: Request, params?: { id?: string }) => {
-  if (params?.id) return params.id;
+const resolveId = (request: Request, resolvedParams?: { id?: string }) => {
+  if (resolvedParams?.id) return resolvedParams.id;
   const url = new URL(request.url);
   const parts = url.pathname.split("/").filter(Boolean);
   return parts.length ? parts[parts.length - 1] : undefined;

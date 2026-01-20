@@ -23,7 +23,8 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const tournamentId = await resolveId(request, params);
+  const resolvedParams = await params;
+  const tournamentId = await resolveId(request, resolvedParams);
   if (!tournamentId) {
     return NextResponse.json({ error: "Torneo no encontrado" }, { status: 404 });
   }

@@ -213,8 +213,8 @@ const resolveIds = (
   request: Request,
   params?: { id?: string; matchId?: string }
 ) => {
-  if (params?.id && params?.matchId) {
-    return { tournamentId: params.id, matchId: params.matchId };
+  if (resolvedParams?.id && params?.matchId) {
+    return { tournamentId: resolvedParams.id, matchId: resolvedParams.matchId };
   }
   const url = new URL(request.url);
   const parts = url.pathname.split("/").filter(Boolean);
@@ -292,8 +292,9 @@ const parseOutcomeType = (value: unknown) => {
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string; matchId: string } }
+  { params }: { params: Promise<{ id: string; matchId: string }> }
 ) {
+  const resolvedParams = await params;
   const session = await getServerSession(authOptions);
   if (
     !session?.user ||
@@ -302,7 +303,7 @@ export async function PATCH(
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
-  const { tournamentId, matchId } = resolveIds(request, params);
+  const { tournamentId, matchId } = resolveIds(request, resolvedParams);
   if (!tournamentId || !matchId) {
     return NextResponse.json({ error: "Partido no encontrado" }, { status: 404 });
   }
@@ -627,8 +628,9 @@ export async function PATCH(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string; matchId: string } }
+  { params }: { params: Promise<{ id: string; matchId: string }> }
 ) {
+  const resolvedParams = await params;
   const session = await getServerSession(authOptions);
   if (
     !session?.user ||
@@ -637,7 +639,7 @@ export async function DELETE(
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
-  const { tournamentId, matchId } = resolveIds(request, params);
+  const { tournamentId, matchId } = resolveIds(request, resolvedParams);
   if (!tournamentId || !matchId) {
     return NextResponse.json({ error: "Partido no encontrado" }, { status: 404 });
   }

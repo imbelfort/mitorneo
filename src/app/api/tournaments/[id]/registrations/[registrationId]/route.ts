@@ -131,8 +131,8 @@ const resolveIds = (
   request: Request,
   params?: { id?: string; registrationId?: string }
 ) => {
-  if (params?.id && params?.registrationId) {
-    return { tournamentId: params.id, registrationId: params.registrationId };
+  if (resolvedParams?.id && params?.registrationId) {
+    return { tournamentId: resolvedParams.id, registrationId: resolvedParams.registrationId };
   }
 
   const url = new URL(request.url);
@@ -151,8 +151,9 @@ const resolveIds = (
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string; registrationId: string } }
+  { params }: { params: Promise<{ id: string; registrationId: string }> }
 ) {
+  const resolvedParams = await params;
   const session = await getServerSession(authOptions);
   if (
     !session?.user ||
@@ -161,7 +162,7 @@ export async function PATCH(
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
-  const { tournamentId, registrationId } = resolveIds(request, params);
+  const { tournamentId, registrationId } = resolveIds(request, resolvedParams);
 
   if (!tournamentId || !registrationId) {
     return NextResponse.json({ error: "Registro no encontrado" }, { status: 404 });
@@ -433,8 +434,9 @@ export async function PATCH(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string; registrationId: string } }
+  { params }: { params: Promise<{ id: string; registrationId: string }> }
 ) {
+  const resolvedParams = await params;
   const session = await getServerSession(authOptions);
   if (
     !session?.user ||
@@ -443,7 +445,7 @@ export async function DELETE(
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
-  const { tournamentId, registrationId } = resolveIds(request, params);
+  const { tournamentId, registrationId } = resolveIds(request, resolvedParams);
 
   if (!tournamentId || !registrationId) {
     return NextResponse.json({ error: "Registro no encontrado" }, { status: 404 });

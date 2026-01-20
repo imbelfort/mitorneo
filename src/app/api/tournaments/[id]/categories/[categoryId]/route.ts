@@ -3,9 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 
-const resolveIds = (request: Request, params?: { id?: string; categoryId?: string }) => {
-  if (params?.id && params?.categoryId) {
-    return { tournamentId: params.id, categoryId: params.categoryId };
+const resolveIds = (request: Request, resolvedParams?: { id?: string; categoryId?: string }) => {
+  if (resolvedParams?.id && params?.categoryId) {
+    return { tournamentId: resolvedParams.id, categoryId: resolvedParams.categoryId };
   }
   const url = new URL(request.url);
   const parts = url.pathname.split("/").filter(Boolean);

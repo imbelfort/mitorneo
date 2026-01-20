@@ -36,14 +36,15 @@ const parseStatus = (value: unknown): StatusInput | "INVALID" => {
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const resolvedParams = await params;
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
-  const tournamentId = await resolveId(request, params);
+  const tournamentId = await resolveId(request, resolvedParams);
   if (!tournamentId) {
     return NextResponse.json({ error: "Torneo no encontrado" }, { status: 404 });
   }

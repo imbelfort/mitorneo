@@ -49,10 +49,9 @@ export async function PUT(request: Request) {
   const rate = parseRate(
     (body as { paymentRateDefault?: unknown }).paymentRateDefault
   );
+  const rawQr = (body as { paymentQrUrl?: unknown }).paymentQrUrl;
   const paymentQrUrl =
-    typeof (body as { paymentQrUrl?: unknown }).paymentQrUrl === "string"
-      ? (body as { paymentQrUrl?: unknown }).paymentQrUrl.trim() || null
-      : null;
+    typeof rawQr === "string" ? rawQr.trim() || null : null;
   if (rate === null || rate < 0) {
     return NextResponse.json({ error: "Monto invalido" }, { status: 400 });
   }

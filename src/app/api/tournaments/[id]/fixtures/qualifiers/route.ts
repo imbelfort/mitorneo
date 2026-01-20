@@ -10,8 +10,8 @@ type QualifiersInput = {
   groupQualifiers?: unknown;
 };
 
-const resolveId = (request: Request, params?: { id?: string }) => {
-  if (params?.id) return params.id;
+const resolveId = (request: Request, resolvedParams?: { id?: string }) => {
+  if (resolvedParams?.id) return resolvedParams.id;
   const url = new URL(request.url);
   const parts = url.pathname.split("/").filter(Boolean);
   return parts.length ? parts[parts.length - 3] : undefined;
@@ -30,8 +30,9 @@ const parsePositiveInt = (value: unknown) => {
 
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const resolvedParams = await params;
   const session = await getServerSession(authOptions);
   if (
     !session?.user ||
@@ -40,7 +41,7 @@ export async function PUT(
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
-  const tournamentId = resolveId(request, params);
+  const tournamentId = resolveId(request, resolvedParams);
   if (!tournamentId) {
     return NextResponse.json({ error: "Torneo no encontrado" }, { status: 404 });
   }

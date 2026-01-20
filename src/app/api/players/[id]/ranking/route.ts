@@ -21,7 +21,8 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const playerId = await resolveId(request, params);
+  const resolvedParams = await params;
+  const playerId = await resolveId(request, resolvedParams);
   if (!playerId) {
     return NextResponse.json({ error: "Jugador no encontrado" }, { status: 404 });
   }

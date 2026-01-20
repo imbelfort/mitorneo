@@ -26,6 +26,11 @@ export default async function UsersAdminPage() {
       updatedAt: true,
     },
   });
+  const serializedUsers = users.map((user) => ({
+    ...user,
+    createdAt: user.createdAt.toISOString(),
+    updatedAt: user.updatedAt.toISOString(),
+  }));
 
   return (
     <main
@@ -59,7 +64,7 @@ export default async function UsersAdminPage() {
             Gestiona usuarios administradores, roles y contrasenas.
           </p>
           <div className="mt-10">
-            <UsersManager initialUsers={users} />
+            <UsersManager initialUsers={serializedUsers} />
           </div>
         </section>
       </div>

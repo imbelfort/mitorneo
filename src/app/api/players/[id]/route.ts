@@ -10,8 +10,8 @@ const isValidStatus = (value: string | undefined): value is PlayerStatus =>
 const isValidEnum = <T extends string>(value: string | undefined, list: T[]): value is T =>
   !!value && list.includes(value as T);
 
-const resolveId = (request: Request, params?: { id?: string }) => {
-  if (params?.id) return params.id;
+const resolveId = (request: Request, resolvedParams?: { id?: string }) => {
+  if (resolvedParams?.id) return resolvedParams.id;
   const url = new URL(request.url);
   const parts = url.pathname.split("/").filter(Boolean);
   return parts.length ? parts[parts.length - 1] : undefined;

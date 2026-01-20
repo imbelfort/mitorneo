@@ -53,7 +53,7 @@ const isPlaceholderValue = (value?: string | null) => {
 
 type PlayoffMatchSlot = {
   id: string;
-  roundNumber: number;
+  roundNumber: number | null;
   teamAId: string | null;
   teamBId: string | null;
   createdAt: Date;
