@@ -18,8 +18,9 @@ const parseDate = (value?: string) => {
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const resolvedParams = await params;
   const session = await getServerSession(authOptions);
   if (
     !session?.user ||
@@ -28,7 +29,7 @@ export async function GET(
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
-  const leagueId = resolveId(request, params);
+  const leagueId = resolveId(request, resolvedParams);
   if (!leagueId) {
     return NextResponse.json({ error: "Liga no encontrada" }, { status: 404 });
   }
@@ -56,14 +57,15 @@ export async function GET(
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const resolvedParams = await params;
   const session = await getServerSession(authOptions);
   if (!session?.user || (session.user.role !== "ADMIN" && session.user.role !== "TOURNAMENT_ADMIN")) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
-  const leagueId = resolveId(request, params);
+  const leagueId = resolveId(request, resolvedParams);
   if (!leagueId) {
     return NextResponse.json({ error: "Liga no encontrada" }, { status: 404 });
   }

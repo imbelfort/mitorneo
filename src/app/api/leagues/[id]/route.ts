@@ -20,8 +20,9 @@ const normalizeOptionalText = (value: unknown) => {
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const resolvedParams = await params;
   const session = await getServerSession(authOptions);
   if (
     !session?.user ||
@@ -30,7 +31,7 @@ export async function PATCH(
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
-  const leagueId = resolveId(request, params);
+  const leagueId = resolveId(request, resolvedParams);
   if (!leagueId) {
     return NextResponse.json({ error: "Liga no encontrada" }, { status: 404 });
   }
@@ -104,8 +105,9 @@ export async function PATCH(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const resolvedParams = await params;
   const session = await getServerSession(authOptions);
   if (
     !session?.user ||
@@ -114,7 +116,7 @@ export async function DELETE(
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
-  const leagueId = resolveId(request, params);
+  const leagueId = resolveId(request, resolvedParams);
   if (!leagueId) {
     return NextResponse.json({ error: "Liga no encontrada" }, { status: 404 });
   }

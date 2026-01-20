@@ -23,14 +23,15 @@ const parseBoolean = (value: unknown) => {
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string; categoryId: string } }
+  { params }: { params: Promise<{ id: string; categoryId: string }> }
 ) {
+  const resolvedParams = await params;
   const session = await getServerSession(authOptions);
   if (!session?.user || (session.user.role !== "ADMIN" && session.user.role !== "TOURNAMENT_ADMIN")) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
-  const { tournamentId, categoryId } = resolveIds(request, params);
+  const { tournamentId, categoryId } = resolveIds(request, resolvedParams);
   if (!tournamentId || !categoryId) {
     return NextResponse.json({ error: "Categoria no encontrada" }, { status: 404 });
   }
