@@ -6,6 +6,7 @@ import { signOut, useSession } from "next-auth/react";
 import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+import ThemeToggle from "./theme-toggle";
 
 export default function HeaderBar() {
   const { data: session, status } = useSession();
@@ -23,6 +24,60 @@ export default function HeaderBar() {
       ? "Administrador"
       : "Administrador de torneo";
 
+  if (pathname == "/") {
+    return (
+      <header className="sticky top-0 z-40 bg-[var(--surface)]/95 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4">
+          <Link href="/" className="inline-flex items-center gap-3">
+            <Image
+              src="/logo/logo1.png"
+              alt="Mi Torneo"
+              width={180}
+              height={54}
+              className="h-10 w-auto object-contain"
+              priority
+            />
+          </Link>
+          <div className="flex items-center gap-3">
+            <ThemeToggle className="border-[var(--border)] bg-[var(--surface-2)] text-[var(--foreground)] hover:bg-[var(--surface)]" />
+            {status === "loading" ? (
+              <span className="text-xs text-slate-400">Cargando...</span>
+            ) : session ? (
+              <>
+                <span className="hidden rounded-full bg-[var(--surface-2)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500 md:inline-flex">
+                  {roleLabel}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  disabled={loggingOut}
+                  className="rounded-full bg-[var(--accent)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-foreground)] shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {loggingOut ? "Saliendo..." : "Cerrar sesion"}
+                </button>
+              </>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--foreground)] transition hover:bg-[var(--surface)]"
+                >
+                  Iniciar sesion
+                </Link>
+                <Link
+                  href="/register"
+                  className="rounded-full bg-[var(--accent)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-foreground)] shadow-sm transition hover:opacity-90"
+                >
+                  Crear cuenta
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
+      </header>
+    );
+  }
+
   const showBackButton = pathname !== "/" && pathname !== "/admin";
 
   const handleBack = () => {
@@ -34,7 +89,7 @@ export default function HeaderBar() {
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/80 backdrop-blur">
+    <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--surface)]/90 backdrop-blur">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-6 py-3">
         <div className="flex items-center gap-4">
           {showBackButton && (
@@ -59,6 +114,7 @@ export default function HeaderBar() {
         </div>
 
         <div className="flex items-center gap-3">
+          <ThemeToggle className="border-[var(--border)] bg-[var(--surface-2)] text-[var(--foreground)] hover:bg-[var(--surface)]" />
           {status === "loading" ? (
             <span className="text-xs text-slate-500">Cargando...</span>
           ) : session ? (

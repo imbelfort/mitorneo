@@ -9,6 +9,8 @@ import TournamentFinalStandings from "@/components/tournaments/tournament-final-
 import TournamentPrizes from "@/components/tournaments/tournament-prizes";
 import TournamentRegistrations from "@/components/tournaments/tournament-registrations";
 import { useEffect, useMemo, useRef, useState } from "react";
+import "quill/dist/quill.snow.css";
+import { useSearchParams } from "next/navigation";
 
 type League = {
   id: string;
@@ -40,23 +42,6 @@ type TournamentCategory = {
   siblingPrice: string | number;
 };
 
-const FONT_OPTIONS = [
-  { label: "Merriweather", value: "Merriweather" },
-  { label: "Cormorant Garamond", value: "Cormorant Garamond" },
-  { label: "Source Serif 4", value: "Source Serif 4" },
-  { label: "Playfair Display", value: "Playfair Display" },
-];
-
-const FONT_SIZES = [
-  { label: "12", value: "1" },
-  { label: "14", value: "2" },
-  { label: "16", value: "3" },
-  { label: "18", value: "4" },
-  { label: "20", value: "5" },
-  { label: "24", value: "6" },
-  { label: "28", value: "7" },
-];
-
 const isRulesEmpty = (value: string | null) => {
   if (!value) return true;
   const text = value
@@ -86,6 +71,7 @@ type Tournament = {
   name: string;
   sportId: string | null;
   address: string | null;
+  photoUrl: string | null;
   rankingEnabled: boolean;
   status: "WAITING" | "ACTIVE" | "FINISHED";
   paymentRate: string;
@@ -186,6 +172,7 @@ export default function TournamentsManager({
   initialTournaments,
   isAdmin,
 }: Props) {
+  const searchParams = useSearchParams();
   const [tournaments, setTournaments] = useState<Tournament[]>(initialTournaments);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<
@@ -215,6 +202,7 @@ export default function TournamentsManager({
     leagueId: leagues[0]?.id ?? "",
     rankingEnabled: true,
     address: "",
+    photoUrl: "",
     startDate: "",
     endDate: "",
     registrationDeadline: "",
@@ -238,22 +226,11 @@ export default function TournamentsManager({
   const [uploadingSponsors, setUploadingSponsors] = useState<
     Record<number, boolean>
   >({});
+  const [uploadingTournamentPhoto, setUploadingTournamentPhoto] = useState(false);
   const rulesEditorRef = useRef<HTMLDivElement | null>(null);
-  const [rulesFocused, setRulesFocused] = useState(false);
-
-  const syncRulesFromEditor = () => {
-    const editor = rulesEditorRef.current;
-    if (!editor) return;
-    const html = editor.innerHTML;
-    const normalized = html === "<br>" ? "" : html;
-    setForm((prev) => ({ ...prev, rulesText: normalized }));
-  };
-
-  const applyRulesCommand = (command: string, value?: string) => {
-    if (typeof document === "undefined") return;
-    document.execCommand(command, false, value);
-    syncRulesFromEditor();
-  };
+  const quillRef = useRef<any>(null);
+  const lastRulesHtmlRef = useRef<string>("");
+  const autoOpenedRef = useRef(false);
 
   const handleSponsorUpload = async (index: number, file?: File | null) => {
     if (!file) return;
@@ -281,15 +258,113 @@ export default function TournamentsManager({
     setMessage("Logo subido");
   };
 
-  useEffect(() => {
-    if (rulesFocused) return;
-    const editor = rulesEditorRef.current;
-    if (!editor) return;
-    const next = form.rulesText ?? "";
-    if (editor.innerHTML !== next) {
-      editor.innerHTML = next;
+  const handleTournamentPhotoUpload = async (file?: File | null) => {
+    if (!file) return;
+    setUploadingTournamentPhoto(true);
+    setError(null);
+    setMessage(null);
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await fetch("/api/uploads/tournament-photo", {
+      method: "POST",
+      body: formData,
+    });
+
+    const data = await res.json().catch(() => ({}));
+    setUploadingTournamentPhoto(false);
+
+    if (!res.ok) {
+      setError(data?.error ?? "No se pudo subir la imagen");
+      return;
     }
-  }, [form.rulesText, rulesFocused]);
+
+    setForm((prev) => ({ ...prev, photoUrl: data.url as string }));
+    setMessage("Imagen subida");
+  };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let quillInstance: any;
+
+    const setup = async () => {
+      if (currentStep !== 1) return;
+      if (!rulesEditorRef.current || quillRef.current) return;
+      if (!rulesEditorRef.current.isConnected) return;
+      const QuillModule = await import("quill");
+      const Quill = QuillModule.default ?? QuillModule;
+      const Font = Quill.import("formats/font");
+      Font.whitelist = [
+        "merriweather",
+        "playfair-display",
+        "cormorant-garamond",
+        "source-serif",
+        "serif",
+        "sans-serif",
+      ];
+      Quill.register(Font, true);
+      const Size = Quill.import("formats/size");
+      Size.whitelist = ["small", "normal", "large", "huge"];
+      Quill.register(Size, true);
+
+      const host = rulesEditorRef.current;
+      host.innerHTML = "";
+      const container = document.createElement("div");
+      host.appendChild(container);
+
+      quillInstance = new Quill(container, {
+        theme: "snow",
+        placeholder: "Escribe las reglas del torneo...",
+        modules: {
+          toolbar: [
+            [{ font: Font.whitelist }, { size: Size.whitelist }],
+            ["bold", "italic", "underline", "strike"],
+            [{ color: [] }, { background: [] }],
+            [{ list: "ordered" }, { list: "bullet" }],
+            [{ align: [] }],
+            ["clean"],
+          ],
+          clipboard: {
+            matchVisual: false,
+          },
+        },
+      });
+
+      quillInstance.on("text-change", () => {
+        const html = quillInstance.root.innerHTML;
+        const normalized = html === "<p><br></p>" ? "" : html;
+        lastRulesHtmlRef.current = normalized;
+        setForm((prev) => ({ ...prev, rulesText: normalized }));
+      });
+
+      quillRef.current = quillInstance;
+      const initial = form.rulesText ?? "";
+      lastRulesHtmlRef.current = initial;
+      quillInstance.clipboard.dangerouslyPasteHTML(initial, "silent");
+    };
+
+    setup();
+
+    return () => {
+      if (quillInstance) {
+        quillInstance.off("text-change");
+      }
+      if (rulesEditorRef.current) {
+        rulesEditorRef.current.innerHTML = "";
+      }
+      quillRef.current = null;
+    };
+  }, [currentStep]);
+
+  useEffect(() => {
+    const quillInstance = quillRef.current;
+    if (!quillInstance) return;
+    const next = form.rulesText ?? "";
+    if (next === lastRulesHtmlRef.current) return;
+    lastRulesHtmlRef.current = next;
+    quillInstance.clipboard.dangerouslyPasteHTML(next, "silent");
+  }, [form.rulesText]);
 
   const canSubmit = useMemo(() => {
     if (!form.name.trim()) return false;
@@ -348,6 +423,7 @@ export default function TournamentsManager({
       leagueId: leagues[0]?.id ?? "",
       rankingEnabled: true,
       address: "",
+      photoUrl: "",
       startDate: "",
       endDate: "",
       registrationDeadline: "",
@@ -366,8 +442,19 @@ export default function TournamentsManager({
     setActiveTournamentName("");
     setActiveTournamentStatus("WAITING");
     setActivePaymentRate("0");
-    setCurrentStep(1);
+    setCurrentStep(nextStep ?? 1);
   };
+
+  useEffect(() => {
+    if (autoOpenedRef.current) return;
+    const openId = searchParams.get("open");
+    if (!openId) return;
+    const selected = tournaments.find((item) => item.id === openId);
+    if (!selected) return;
+    autoOpenedRef.current = true;
+    const preferredStep = selected.status === "WAITING" ? 1 : 6;
+    startEditing(selected, preferredStep);
+  }, [searchParams, tournaments]);
 
   const refreshTournaments = async () => {
     const res = await fetch("/api/tournaments", { cache: "no-store" });
@@ -610,7 +697,7 @@ export default function TournamentsManager({
     setCategorySiblingPrices((prev) => ({ ...prev, [categoryId]: value }));
   };
 
-  const startEditing = (tournament: Tournament) => {
+  const startEditing = (tournament: Tournament, nextStep?: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9) => {
     const fallbackSportId =
       tournament.sportId ??
       tournament.categories[0]?.category?.sport?.id ??
@@ -624,13 +711,14 @@ export default function TournamentsManager({
     setActiveTournamentName(tournament.name);
     setActiveTournamentStatus(tournament.status ?? "WAITING");
     setActivePaymentRate(tournament.paymentRate ?? "0");
-    setCurrentStep(1);
+    setCurrentStep(nextStep ?? 1);
     setForm({
       name: tournament.name,
       sportId: fallbackSportId,
       leagueId: tournament.leagueId ?? "",
       rankingEnabled: tournament.rankingEnabled ?? true,
       address: tournament.address ?? "",
+      photoUrl: tournament.photoUrl ?? "",
       startDate: toISODate(tournament.startDate),
       endDate: toISODate(tournament.endDate),
       registrationDeadline: toISODate(tournament.registrationDeadline),
@@ -725,6 +813,7 @@ export default function TournamentsManager({
       leagueId: form.leagueId,
       rankingEnabled: form.rankingEnabled,
       address: form.address || null,
+      photoUrl: form.photoUrl || null,
       startDate: form.startDate,
       endDate: noEndDate ? null : form.endDate || null,
       registrationDeadline: form.registrationDeadline,
@@ -1194,6 +1283,58 @@ export default function TournamentsManager({
                 placeholder="Ej. Av. Principal #123"
               />
             </div>
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-medium text-slate-700">
+                Imagen del torneo (opcional)
+              </label>
+              <div className="flex flex-wrap items-center gap-3">
+                <input
+                  value={form.photoUrl}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, photoUrl: e.target.value }))
+                  }
+                  className="min-w-[240px] flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                  placeholder="https://... o /uploads/..."
+                />
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300">
+                  {uploadingTournamentPhoto ? "Subiendo..." : "Subir foto"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={uploadingTournamentPhoto}
+                    onChange={(event) =>
+                      handleTournamentPhotoUpload(event.target.files?.[0] ?? null)
+                    }
+                  />
+                </label>
+                {form.photoUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setForm((prev) => ({ ...prev, photoUrl: "" }))}
+                    className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-slate-300"
+                  >
+                    Quitar
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-slate-500">
+                Recomendado: 1200x600 px (2:1), formato JPG o PNG, maximo 2MB.
+              </p>
+              {form.photoUrl ? (
+                <div className="mt-3 h-40 w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                  <img
+                    src={form.photoUrl}
+                    alt="Imagen del torneo"
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500">
+                  Si no subes una foto, se usara la imagen de la liga o una foto aleatoria.
+                </p>
+              )}
+            </div>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -1256,135 +1397,14 @@ export default function TournamentsManager({
             </div>
             <div className="space-y-2 md:col-span-2">
               <label className="text-sm font-medium text-slate-700">Reglas</label>
-              <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <div className="flex flex-wrap items-center gap-2 border-b border-slate-200/70 bg-slate-50/80 px-3 py-2">
-                  <select
-                    defaultValue=""
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        applyRulesCommand("fontName", e.target.value);
-                        e.currentTarget.value = "";
-                      }
-                    }}
-                    className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700"
-                  >
-                    <option value="">Fuente</option>
-                    {FONT_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    defaultValue=""
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        applyRulesCommand("fontSize", e.target.value);
-                        e.currentTarget.value = "";
-                      }
-                    }}
-                    className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700"
-                  >
-                    <option value="">Tamano</option>
-                    {FONT_SIZES.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="color"
-                    aria-label="Color de texto"
-                    onChange={(e) => applyRulesCommand("foreColor", e.target.value)}
-                    className="h-8 w-8 cursor-pointer rounded-lg border border-slate-200 bg-white p-1"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => applyRulesCommand("bold")}
-                    className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:border-slate-300"
-                  >
-                    Negrita
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applyRulesCommand("italic")}
-                    className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:border-slate-300"
-                  >
-                    Italica
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applyRulesCommand("underline")}
-                    className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:border-slate-300"
-                  >
-                    Subrayar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applyRulesCommand("insertUnorderedList")}
-                    className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:border-slate-300"
-                  >
-                    Lista
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applyRulesCommand("insertOrderedList")}
-                    className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:border-slate-300"
-                  >
-                    Numerada
-                  </button>
-                  <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-1 py-1">
-                    <button
-                      type="button"
-                      onClick={() => applyRulesCommand("justifyLeft")}
-                      className="rounded-md px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                    >
-                      Izq
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyRulesCommand("justifyCenter")}
-                      className="rounded-md px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                    >
-                      Centro
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyRulesCommand("justifyRight")}
-                      className="rounded-md px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                    >
-                      Der
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => applyRulesCommand("removeFormat")}
-                    className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:border-slate-300"
-                  >
-                    Limpiar
-                  </button>
-                </div>
-                <div className="relative">
-                  {rulesEmpty && (
-                    <div className="pointer-events-none absolute left-3 top-3 text-sm text-slate-400">
-                      Escribe las reglas del torneo...
-                    </div>
-                  )}
-                  <div
-                    ref={rulesEditorRef}
-                    contentEditable
-                    onInput={syncRulesFromEditor}
-                    onFocus={() => setRulesFocused(true)}
-                    onBlur={() => {
-                      setRulesFocused(false);
-                      syncRulesFromEditor();
-                    }}
-                    className="min-h-[180px] px-3 py-3 text-sm text-slate-900 focus:outline-none"
-                    style={{ fontFamily: "Merriweather, 'Times New Roman', serif" }}
-                    suppressContentEditableWarning
-                  />
-                </div>
+              <div className="rules-editor overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div ref={rulesEditorRef} />
               </div>
+              {rulesEmpty && (
+                <p className="text-xs text-slate-500">
+                  Puedes pegar desde Word y conservar estilos, colores y tamanos.
+                </p>
+              )}
             </div>
           </div>
 

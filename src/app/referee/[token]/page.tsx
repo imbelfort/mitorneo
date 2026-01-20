@@ -1,5 +1,6 @@
 "use client";
 
+import { useParams } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -8,7 +9,6 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
-import { useParams } from "next/navigation";
 
 type Player = {
   id: string;
@@ -145,6 +145,20 @@ export default function RefereeMatchPage() {
     setIndex: number;
     points: number;
   } | null>(null);
+  const setWins = useMemo(() => {
+    const settled = sets.slice(0, Math.max(0, activeSet));
+    return settled.reduce(
+      (acc, set) => {
+        if (set.a === set.b) return acc;
+        if (set.a > set.b) acc.A += 1;
+        if (set.b > set.a) acc.B += 1;
+        return acc;
+      },
+      { A: 0, B: 0 }
+    );
+  }, [sets, activeSet]);
+  const setLeadLabel =
+    activeSet > 0 ? `Set a favor ${setWins.A}-${setWins.B}` : null;
 
   const isFronton = useMemo(() => {
     const sportName = match?.category?.sport?.name ?? "";
@@ -331,7 +345,7 @@ export default function RefereeMatchPage() {
             : prev
         );
         setMessage(
-          options?.finished ? "Partido finalizado" : "Marcador actualizado"
+          options?.finished ? "Partido finalizado" : " "
         );
         if (options?.finished) {
           setIsLive(false);
@@ -564,13 +578,18 @@ export default function RefereeMatchPage() {
                     <h2 className="mt-2 text-xl font-semibold text-white">
                       {teamALabel} vs {teamBLabel}
                     </h2>
+                    {setLeadLabel && (
+                      <p className="mt-1 text-xs font-semibold text-slate-300">
+                        {setLeadLabel}
+                      </p>
+                    )}
                     <p className="mt-2 text-xs text-slate-400">
                       {buildTeamMembers(match?.teamA)} ·{" "}
                       {buildTeamMembers(match?.teamB)}
                     </p>
                   </div>
                   <span className="text-xs text-slate-400">
-                    {saving ? "Guardando..." : "Guardado automatico"}
+                    {saving ? " " : " "}
                   </span>
                 </div>
 

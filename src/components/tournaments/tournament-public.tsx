@@ -98,6 +98,7 @@ type TournamentPublicData = {
   id: string;
   name: string;
   description?: string | null;
+  photoUrl?: string | null;
   address?: string | null;
   startDate?: string | null;
   endDate?: string | null;
@@ -106,6 +107,7 @@ type TournamentPublicData = {
   playDays: string[];
   schedulePublished?: boolean;
   groupsPublished?: boolean;
+  playoffsPublished?: boolean;
   sport?: { id: string; name: string } | null;
   league?: { id: string; name: string; photoUrl?: string | null } | null;
   owner?: { name?: string | null; email?: string | null } | null;
@@ -146,6 +148,22 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "prizes", label: "Premios" },
   { key: "contact", label: "Contacto" },
 ];
+
+const FALLBACK_TOURNAMENT_PHOTOS = [
+  "/hero/fotouno.jpeg",
+  "/hero/fotodos.jpeg",
+  "/hero/fototres.jpeg",
+  "/hero/fotocuatro.jpeg",
+];
+
+const pickFallbackTournamentPhoto = (seed: string) => {
+  if (!seed) return FALLBACK_TOURNAMENT_PHOTOS[0];
+  let total = 0;
+  for (let i = 0; i < seed.length; i += 1) {
+    total += seed.charCodeAt(i);
+  }
+  return FALLBACK_TOURNAMENT_PHOTOS[total % FALLBACK_TOURNAMENT_PHOTOS.length];
+};
 
   const formatDateLong = (value?: string | null) => {
     if (!value) return "N/D";
@@ -287,6 +305,7 @@ export default function TournamentPublic({
   tournament: TournamentPublicData;
 }) {
   const [tab, setTab] = useState<TabKey>("info");
+  const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
   const [participantQuery, setParticipantQuery] = useState("");
   const [participantDraft, setParticipantDraft] = useState("");
   const [matches, setMatches] = useState<Match[]>(tournament.matches);
@@ -294,27 +313,50 @@ export default function TournamentPublic({
   const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set());
   const schedulePublished = Boolean(tournament.schedulePublished);
   const groupsPublished = Boolean(tournament.groupsPublished);
+  const playoffsPublished = Boolean(tournament.playoffsPublished);
   const visibleTabs = useMemo(
     () =>
       TABS.filter((item) => {
         if (!schedulePublished && item.key === "fixture") return false;
         if (!groupsPublished && item.key === "groups") return false;
         if (!groupsPublished && item.key === "standings") return false;
+        if (!playoffsPublished && item.key === "bracket") return false;
         return true;
       }),
-    [schedulePublished, groupsPublished]
+    [schedulePublished, groupsPublished, playoffsPublished]
   );
 
   useEffect(() => {
-    if (schedulePublished && groupsPublished) return;
+    if (schedulePublished && groupsPublished && playoffsPublished) return;
     if (!schedulePublished && tab === "fixture") {
       setTab("info");
       return;
     }
     if (!groupsPublished && (tab === "groups" || tab === "standings")) {
       setTab("info");
+      return;
     }
-  }, [schedulePublished, groupsPublished, tab]);
+    if (!playoffsPublished && tab === "bracket") {
+      setTab("info");
+    }
+  }, [schedulePublished, groupsPublished, playoffsPublished, tab]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const updateTheme = () => {
+      const next = document.documentElement.classList.contains("theme-dark")
+        ? "dark"
+        : "light";
+      setThemeMode(next);
+    };
+    updateTheme();
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const liveTabs: TabKey[] = ["fixture", "results", "bracket", "positions"];
@@ -722,28 +764,42 @@ export default function TournamentPublic({
     return formatPlayoffRoundLabel(bracketSize, normalizedRound);
   };
 
+  const tournamentPhoto = useMemo(() => {
+    if (tournament.photoUrl) return tournament.photoUrl;
+    if (tournament.league?.photoUrl) return tournament.league.photoUrl;
+    return pickFallbackTournamentPhoto(tournament.id);
+  }, [tournament.id, tournament.league?.photoUrl, tournament.photoUrl]);
+
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="relative overflow-hidden border-b border-white/10 bg-[radial-gradient(1200px_circle_at_10%_20%,rgba(59,130,246,0.25),transparent_55%),radial-gradient(900px_circle_at_90%_0%,rgba(14,165,233,0.25),transparent_50%)]">
+    <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
+      <div className="relative overflow-hidden border-b border-[var(--border)] bg-[radial-gradient(1200px_circle_at_10%_20%,rgba(59,130,246,0.25),transparent_55%),radial-gradient(900px_circle_at_90%_0%,rgba(14,165,233,0.25),transparent_50%)]">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-12">
+          <div className="relative h-52 w-full overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--surface)]">
+            <img
+              src={tournamentPhoto}
+              alt={`Imagen del torneo ${tournament.name}`}
+              className="h-full w-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent" />
+          </div>
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-300/80">
                 Torneo
               </p>
               <h1
-                className="mt-3 text-4xl font-semibold text-white"
+                className="mt-3 text-4xl font-semibold text-slate-900"
                 style={{ fontFamily: "'Merriweather', serif" }}
               >
                 {tournament.name}
               </h1>
-              <p className="mt-3 max-w-2xl text-sm text-slate-200/80">
+              <p className="mt-3 max-w-2xl text-sm text-slate-600">
                 {tournament.description ||
                   "Informacion oficial del torneo y detalles para los jugadores."}
               </p>
             </div>
-            <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-slate-200">
-              <div className="h-16 w-24 overflow-hidden rounded-xl border border-white/10 bg-white/10">
+            <div className="flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-xs text-slate-600">
+              <div className="h-16 w-24 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-2)]">
                 {tournament.league?.photoUrl ? (
                   <img
                     src={tournament.league.photoUrl}
@@ -757,13 +813,13 @@ export default function TournamentPublic({
                 )}
               </div>
               <div>
-                <p className="font-semibold text-white">
+                <p className="font-semibold text-slate-900">
                   {tournament.league?.name ?? "Sin liga"}
                 </p>
-                <p className="mt-1 text-slate-300">
+                <p className="mt-1 text-slate-500">
                   {tournament.sport?.name ?? "Sin deporte"}
                 </p>
-                <p className="mt-1 text-slate-300">
+                <p className="mt-1 text-slate-500">
                   Inicio: {formatDateShort(tournament.startDate)}
                 </p>
               </div>
@@ -771,10 +827,10 @@ export default function TournamentPublic({
           </div>
 
           {tournament.sponsors.length > 0 && (
-            <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+            <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
               {tournament.sponsors.map((sponsor, index) => {
                 const content = (
-                  <div className="flex h-14 w-32 items-center justify-center rounded-xl border border-white/10 bg-white/10 px-3 py-2">
+                  <div className="flex h-14 w-32 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2">
                     <img
                       src={sponsor.imageUrl}
                       alt={sponsor.name ?? `Auspiciador ${index + 1}`}
@@ -813,7 +869,7 @@ export default function TournamentPublic({
               className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] ${
                 tab === item.key
                   ? "bg-cyan-400/90 text-slate-900"
-                  : "border border-white/10 bg-white/5 text-slate-200/80"
+                  : "border border-[var(--border)] bg-[var(--surface)] text-slate-600"
               }`}
             >
               {item.label}
@@ -824,35 +880,35 @@ export default function TournamentPublic({
         {tab === "info" && (
           <section className="mt-8">
             <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-                <h2 className="text-lg font-semibold text-white">Reglas</h2>
+              <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6">
+                <h2 className="text-lg font-semibold text-slate-900">Reglas</h2>
                 {tournament.rulesText ? (
                   <div
                     className="prose prose-invert mt-4 max-w-none text-sm"
                     dangerouslySetInnerHTML={{ __html: tournament.rulesText }}
                   />
                 ) : (
-                  <p className="mt-4 text-sm text-slate-300">
+                  <p className="mt-4 text-sm text-slate-500">
                     Sin reglas publicadas.
                   </p>
                 )}
               </div>
               <div className="space-y-6">
-                <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-                  <h2 className="text-lg font-semibold text-white">Fechas clave</h2>
-                  <div className="mt-4 space-y-3 text-sm text-slate-300">
+                <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6">
+                  <h2 className="text-lg font-semibold text-slate-900">Fechas clave</h2>
+                  <div className="mt-4 space-y-3 text-sm text-slate-500">
                     <p>Inicio: {formatDateLong(tournament.startDate)}</p>
                     <p>Fin: {formatDateLong(tournament.endDate)}</p>
                     <p>
                       Cierre inscripciones: {formatDateLong(tournament.registrationDeadline)}
                     </p>
                     <div>
-                      <p className="mt-4 font-semibold text-white">Dias de juego</p>
+                      <p className="mt-4 font-semibold text-slate-900">Dias de juego</p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {tournament.playDays.map((day) => (
                           <span
                             key={day}
-                            className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs text-slate-200"
+                            className="rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1 text-xs text-slate-600"
                           >
                             {formatDateShort(day)}
                           </span>
@@ -861,42 +917,42 @@ export default function TournamentPublic({
                     </div>
                   </div>
                 </div>
-                <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-                  <h2 className="text-lg font-semibold text-white">Sedes</h2>
-                  <div className="mt-4 space-y-3 text-sm text-slate-300">
+                <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6">
+                  <h2 className="text-lg font-semibold text-slate-900">Sedes</h2>
+                  <div className="mt-4 space-y-3 text-sm text-slate-500">
                     {tournament.clubs.map((club) => (
                       <div
                         key={club.id}
-                        className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3"
+                        className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3"
                       >
-                        <p className="font-semibold text-white">{club.name}</p>
+                        <p className="font-semibold text-slate-900">{club.name}</p>
                         <p>{club.address ?? "Sin direccion"}</p>
-                        <p className="text-xs text-slate-300">
+                        <p className="text-xs text-slate-500">
                           Canchas habilitadas: {club.courtsCount ?? 1}
                         </p>
                       </div>
                     ))}
                   </div>
                 </div>
-                <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-                  <h2 className="text-lg font-semibold text-white">
+                <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6">
+                  <h2 className="text-lg font-semibold text-slate-900">
                     Categorias disponibles
                   </h2>
                   <div className="mt-4 space-y-3 text-sm">
                     {tournament.categories.map((entry) => (
                       <div
                         key={entry.categoryId}
-                        className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                        className="flex flex-col gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                       >
                         <div>
-                          <p className="font-semibold text-white">
+                          <p className="font-semibold text-slate-900">
                             {entry.category.name}
                           </p>
-                          <p className="text-xs text-slate-300">
+                          <p className="text-xs text-slate-500">
                             {entry.category.abbreviation} - {entry.category.sport?.name ?? "N/D"}
                           </p>
                         </div>
-                        <div className="text-xs text-slate-300">
+                        <div className="text-xs text-slate-500">
                           <p>Precio 1: Bs {entry.price}</p>
                           <p>Precio 2+: Bs {entry.secondaryPrice || entry.price}</p>
                           <p>Precio hermano: Bs {entry.siblingPrice || entry.price}</p>
@@ -912,7 +968,7 @@ export default function TournamentPublic({
 
 {tab === "participants" && (
           <section className="mt-8 space-y-6">
-            <div className="flex flex-wrap items-center gap-3 rounded-3xl border border-white/10 bg-white/5 p-5">
+            <div className="flex flex-wrap items-center gap-3 rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5">
               <div className="flex-1">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
                   Filtrar participantes
@@ -922,7 +978,7 @@ export default function TournamentPublic({
                   value={participantDraft}
                   onChange={(e) => setParticipantDraft(e.target.value)}
                   placeholder="Equipo, jugador, ciudad o pais"
-                  className="mt-2 w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-slate-100 placeholder:text-slate-400 focus:border-cyan-300 focus:outline-none"
+                  className="mt-2 w-full rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] px-4 py-2 text-sm text-slate-100 placeholder:text-slate-400 focus:border-cyan-300 focus:outline-none"
                 />
               </div>
               <div className="flex items-end gap-2">
@@ -939,33 +995,33 @@ export default function TournamentPublic({
                     setParticipantDraft("");
                     setParticipantQuery("");
                   }}
-                  className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-200"
+                  className="rounded-full border border-[var(--border)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-600"
                 >
                   Limpiar
                 </button>
               </div>
             </div>
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+            <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-lg font-semibold text-white">
+                  <h3 className="text-lg font-semibold text-slate-900">
                     Participantes inscritos
                   </h3>
-                  <p className="text-xs text-slate-300">
+                  <p className="text-xs text-slate-500">
                     {filteredParticipantRows.length} jugadores encontrados
                   </p>
                 </div>
               </div>
               {filteredParticipantRows.length === 0 ? (
-                <p className="mt-4 text-sm text-slate-300">Sin inscritos.</p>
+                <p className="mt-4 text-sm text-slate-500">Sin inscritos.</p>
               ) : (
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   {filteredParticipantRows.map((row) => (
                     <div
                       key={row.id}
-                      className="flex gap-3 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm"
+                      className="flex gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3 text-sm"
                     >
-                      <div className="h-14 w-14 overflow-hidden rounded-xl border border-white/10 bg-white/10">
+                      <div className="h-14 w-14 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-2)]">
                         {row.player.photoUrl ? (
                           <img
                             src={row.player.photoUrl}
@@ -973,24 +1029,43 @@ export default function TournamentPublic({
                             className="h-full w-full object-cover"
                           />
                         ) : (
-                          <div className="flex h-full w-full items-center justify-center text-xs text-slate-400">
-                            Sin foto
+                          <div className="flex h-full w-full items-center justify-center bg-[var(--surface-2)] text-slate-400">
+                            <svg
+                              aria-hidden="true"
+                              viewBox="0 0 64 64"
+                              className="h-10 w-10"
+                              fill="none"
+                            >
+                              <circle
+                                cx="32"
+                                cy="24"
+                                r="12"
+                                stroke="currentColor"
+                                strokeWidth="3"
+                              />
+                              <path
+                                d="M12 56c2-10 12-18 20-18s18 8 20 18"
+                                stroke="currentColor"
+                                strokeWidth="3"
+                                strokeLinecap="round"
+                              />
+                            </svg>
                           </div>
                         )}
                       </div>
                       <div className="min-w-0">
-                        <p className="font-semibold text-white">
+                        <p className="font-semibold text-slate-900">
                           {row.player.firstName} {row.player.lastName}
                         </p>
                         <p className="mt-1 text-xs text-cyan-200">
                           {row.category.name} ({row.category.abbreviation})
                         </p>
                         {row.teamName && (
-                          <p className="mt-1 text-xs text-slate-300">
+                          <p className="mt-1 text-xs text-slate-500">
                             Equipo: {row.teamName}
                           </p>
                         )}
-                        <p className="mt-1 text-xs text-slate-300">
+                        <p className="mt-1 text-xs text-slate-500">
                           {row.location || "Sin ubicacion"}
                         </p>
                       </div>
@@ -1005,21 +1080,21 @@ export default function TournamentPublic({
         {tab === "groups" && (
           <section className="mt-8 space-y-6">
             {groupSeedings.length === 0 ? (
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-sm text-slate-300">
+              <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6 text-sm text-slate-500">
                 Aun no hay sembrado de grupos.
               </div>
             ) : (
               groupSeedings.map((entry) => (
                 <div
                   key={`groups-${entry.category.id}`}
-                  className="rounded-3xl border border-white/10 bg-white/5 p-6"
+                  className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <h3 className="text-lg font-semibold text-white">
+                      <h3 className="text-lg font-semibold text-slate-900">
                         {entry.category.name}
                       </h3>
-                      <p className="text-xs text-slate-300">
+                      <p className="text-xs text-slate-500">
                         {entry.category.abbreviation}
                       </p>
                     </div>
@@ -1029,13 +1104,13 @@ export default function TournamentPublic({
                     {entry.groups.map((group) => (
                       <div
                         key={`group-table-${entry.category.id}-${group.key}`}
-                        className="overflow-hidden rounded-2xl border border-white/10 bg-white/10"
+                        className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-2)]"
                       >
-                        <div className="bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">
+                        <div className="bg-[var(--surface-2)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">
                           Grupo {group.key}
                         </div>
-                        <table className="min-w-full text-xs text-slate-200">
-                          <thead className="bg-white/5 uppercase tracking-[0.2em] text-slate-300">
+                        <table className="min-w-full text-xs text-slate-600">
+                          <thead className="bg-[var(--surface)] uppercase tracking-[0.2em] text-slate-500">
                             <tr>
                               <th className="px-3 py-2 text-left">Ranking</th>
                               <th className="px-3 py-2 text-left">Jugador/Equipo</th>
@@ -1048,10 +1123,10 @@ export default function TournamentPublic({
                                   {registration.rankingNumber ?? "-"}
                                 </td>
                                 <td className="px-3 py-2">
-                                  <p className="font-semibold text-white">
+                                  <p className="font-semibold text-slate-900">
                                     {teamLabel(registration)}
                                   </p>
-                                  <p className="mt-1 text-[11px] text-slate-300">
+                                  <p className="mt-1 text-[11px] text-slate-500">
                                     {teamMembersLabel(registration)}
                                   </p>
                                 </td>
@@ -1078,16 +1153,16 @@ export default function TournamentPublic({
             {Array.from(matchesByDate.entries()).map(([dateKey, matches]) => (
               <div
                 key={`fixture-${dateKey}`}
-                className="rounded-3xl border border-white/10 bg-white/5 p-6"
+                className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6"
               >
-                <h3 className="text-lg font-semibold text-white">
+                <h3 className="text-lg font-semibold text-slate-900">
                   {dateKey === "sin-fecha"
                     ? "Sin fecha asignada"
                     : formatDateLong(dateKey)}
                 </h3>
-                <div className="mt-4 overflow-hidden rounded-2xl border border-white/10">
-                  <table className="min-w-full text-xs text-slate-200">
-                    <thead className="bg-white/10 uppercase tracking-[0.2em] text-slate-300">
+                <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--border)]">
+                  <table className="min-w-full text-xs text-slate-600">
+                    <thead className="bg-[var(--surface-2)] uppercase tracking-[0.2em] text-slate-500">
                       <tr>
                         <th className="px-3 py-2 text-left">Hora</th>
                         <th className="px-3 py-2 text-left">Club</th>
@@ -1125,7 +1200,7 @@ export default function TournamentPublic({
                         const isTeamAExpanded = expandedTeams.has(teamAKey);
                         const isTeamBExpanded = expandedTeams.has(teamBKey);
                         return (
-                          <tr key={match.id} className="bg-white/5">
+                          <tr key={match.id} className="bg-[var(--surface)]">
                             <td className="px-3 py-2">
                               {match.startTime ?? "N/D"}
                             </td>
@@ -1141,7 +1216,7 @@ export default function TournamentPublic({
                             <td className="px-3 py-2">
                               {getPlayoffLabel(match)}
                             </td>
-                            <td className="px-3 py-2 font-semibold text-white">
+                            <td className="px-3 py-2 font-semibold text-slate-900">
                               {isPlayoffWaiting ? (
                                 <span className="text-xs text-slate-400">
                                   Por definir
@@ -1166,7 +1241,7 @@ export default function TournamentPublic({
                                     )}
                                   </div>
                                   {canExpandTeamA && isTeamAExpanded && (
-                                    <div className="mt-1 text-[11px] text-slate-300">
+                                    <div className="mt-1 text-[11px] text-slate-500">
                                       {teamAMembers.join(" / ")}
                                     </div>
                                   )}
@@ -1174,7 +1249,7 @@ export default function TournamentPublic({
                               )}
                             </td>
                             <td className="px-3 py-2 text-slate-400">vs</td>
-                            <td className="px-3 py-2 font-semibold text-white">
+                            <td className="px-3 py-2 font-semibold text-slate-900">
                               {isPlayoffWaiting ? (
                                 <span className="text-xs text-slate-400">
                                   Por definir
@@ -1199,14 +1274,14 @@ export default function TournamentPublic({
                                     )}
                                   </div>
                                   {canExpandTeamB && isTeamBExpanded && (
-                                    <div className="mt-1 text-[11px] text-slate-300">
+                                    <div className="mt-1 text-[11px] text-slate-500">
                                       {teamBMembers.join(" / ")}
                                     </div>
                                   )}
                                 </div>
                               )}
                             </td>
-                            <td className="px-3 py-2 text-slate-300">
+                            <td className="px-3 py-2 text-slate-500">
                               <div className="flex items-center gap-2">
                                 {score ?? "-"}
                                 {isLive && (
@@ -1230,26 +1305,26 @@ export default function TournamentPublic({
         {tab === "standings" && (
           <section className="mt-8 space-y-6">
             {standingsByCategoryGroups.length === 0 ? (
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-sm text-slate-300">
+              <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6 text-sm text-slate-500">
                 No hay tabla de posiciones disponible.
               </div>
             ) : (
               standingsByCategoryGroups.map((entry) => (
                 <div
                   key={`standings-${entry.category.id}`}
-                  className="rounded-3xl border border-white/10 bg-white/5 p-6"
+                  className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <h3 className="text-lg font-semibold text-white">
+                      <h3 className="text-lg font-semibold text-slate-900">
                         {entry.category.name}
                       </h3>
-                      <p className="text-xs text-slate-300">
+                      <p className="text-xs text-slate-500">
                         {entry.category.abbreviation}
                       </p>
                     </div>
                   </div>
-                  <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-3 text-[11px] text-slate-300">
+                  <div className="mt-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 text-[11px] text-slate-500">
                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">
                       Significado de columnas
                     </p>
@@ -1270,13 +1345,13 @@ export default function TournamentPublic({
                     {entry.groups.map((group) => (
                         <div
                           key={`standings-${entry.category.id}-${group.key}`}
-                          className="rounded-2xl border border-white/10 bg-white/10"
+                          className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)]"
                         >
-                          <div className="bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">
+                          <div className="bg-[var(--surface-2)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">
                             Grupo {group.key}
                           </div>
-                          <table className="w-full text-[11px] text-slate-200">
-                            <thead className="bg-white/5 uppercase tracking-[0.2em] text-slate-300">
+                          <table className="w-full text-[11px] text-slate-600">
+                            <thead className="bg-[var(--surface)] uppercase tracking-[0.2em] text-slate-500">
                               <tr>
                                 <th className="px-3 py-2 text-left">Pos</th>
                                 <th className="px-3 py-2 text-left">Jugador/Equipo</th>
@@ -1304,7 +1379,7 @@ export default function TournamentPublic({
                                     <td className="px-3 py-2 text-cyan-200">
                                       {index + 1}
                                     </td>
-                                    <td className="px-3 py-2 font-semibold text-white">
+                                    <td className="px-3 py-2 font-semibold text-slate-900">
                                       {registration ? teamLabel(registration) : "N/D"}
                                     </td>
                                     <td className="px-3 py-2">
@@ -1328,7 +1403,7 @@ export default function TournamentPublic({
                       ))}
                     </div>
                   {entry.groups.length === 1 && entry.groups[0].entries.length > 0 && (
-                    <div className="mt-5 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4 text-xs text-slate-200">
+                    <div className="mt-5 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4 text-xs text-slate-600">
                       <p className="text-[11px] uppercase tracking-[0.2em] text-cyan-200">
                         Posiciones finales
                       </p>
@@ -1339,7 +1414,7 @@ export default function TournamentPublic({
                           return (
                             <div
                               key={`${item.id}-podium`}
-                              className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[11px]"
+                              className="rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1 text-[11px]"
                             >
                               {idx + 1}º {label}
                             </div>
@@ -1357,21 +1432,21 @@ export default function TournamentPublic({
         {tab === "bracket" && (
           <section className="mt-8 space-y-6">
             {playoffBrackets.length === 0 ? (
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-sm text-slate-300">
+              <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6 text-sm text-slate-500">
                 No hay llaves de playoff para mostrar.
               </div>
             ) : (
               playoffBrackets.map((entry) => (
                 <div
                   key={`bracket-${entry.category.id}`}
-                  className="rounded-3xl border border-white/10 bg-white/5 p-6"
+                  className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <h3 className="text-lg font-semibold text-white">
+                      <h3 className="text-lg font-semibold text-slate-900">
                         {entry.category.name}
                       </h3>
-                      <p className="text-xs text-slate-300">
+                      <p className="text-xs text-slate-500">
                         {entry.category.abbreviation}
                       </p>
                     </div>
@@ -1385,8 +1460,8 @@ export default function TournamentPublic({
                       registrationMap={registrationMap}
                       labelByRegistration={labelByRegistration}
                       matchStatusByMatchId={entry.matchStatusByMatchId}
-                      className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-3"
-                      theme="dark"
+                      className="relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3"
+                      theme={themeMode}
                       disableSwap
                     />
                   </div>
@@ -1404,47 +1479,132 @@ export default function TournamentPublic({
               </p>
             )}
             {resultMatches.length === 0 ? (
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-sm text-slate-300">
+              <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6 text-sm text-slate-500">
                 Aun no hay resultados registrados.
               </div>
             ) : (
-              resultMatches.map((match) => {
+              [...resultMatches]
+                .sort((a, b) => {
+                  const aLive = a.liveState?.isLive ? 1 : 0;
+                  const bLive = b.liveState?.isLive ? 1 : 0;
+                  if (aLive !== bLive) return bLive - aLive;
+                  return 0;
+                })
+                .map((match) => {
                 const category =
                   match.category ?? categoriesById.get(match.categoryId);
                 const score = formatMatchScore(match);
+                const scoreParts = score ? score.split(" | ") : [];
+                const activeSetIndex =
+                  typeof match.liveState?.activeSet === "number"
+                    ? match.liveState.activeSet
+                    : null;
+                const mainScore =
+                  activeSetIndex !== null && scoreParts[activeSetIndex]
+                    ? scoreParts[activeSetIndex]
+                    : score ?? "N/D";
+                const unitLabel =
+                  tournament.sport?.name?.toLowerCase().includes("fronton")
+                    ? "Cancha"
+                    : "Set";
+                const detailedScore =
+                  activeSetIndex !== null
+                    ? null
+                    : scoreParts.length
+                      ? scoreParts
+                          .map((part, index) => `${unitLabel} ${index + 1}: ${part}`)
+                          .join(" · ")
+                      : null;
+                const setLeadLabel =
+                  activeSetIndex !== null && activeSetIndex > 0
+                    ? (() => {
+                        let aWins = 0;
+                        let bWins = 0;
+                        for (let i = 0; i < activeSetIndex; i += 1) {
+                          const part = scoreParts[i];
+                          if (!part) continue;
+                          const [aRaw, bRaw] = part.split("-");
+                          const aVal = Number(aRaw);
+                          const bVal = Number(bRaw);
+                          if (!Number.isFinite(aVal) || !Number.isFinite(bVal)) continue;
+                          if (aVal > bVal) aWins += 1;
+                          if (bVal > aVal) bWins += 1;
+                        }
+                        const label = unitLabel === "Cancha" ? "Cancha a favor" : "Set a favor";
+                        return `${label} ${aWins}-${bWins}`;
+                      })()
+                    : null;
                 const isLive = Boolean(match.liveState?.isLive);
+                const isFinished = isMatchComplete(match);
                 return (
                   <div
                     key={`result-${match.id}`}
-                    className="rounded-3xl border border-white/10 bg-white/5 p-6"
+                    className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
                       <div>
                         <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
                           {category?.name ?? "Categoria"}
                         </p>
-                        <div className="mt-2 flex flex-wrap items-center gap-3 text-base font-semibold text-white">
-                          <span>
-                            {teamLabel(match.teamA)}{" "}
-                            <span className="text-slate-400">vs</span>{" "}
-                            {teamLabel(match.teamB)}
-                          </span>
-                          {isLive && (
+                        {isLive && (
+                          <div className="mt-2">
                             <span className="rounded-full bg-rose-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-200">
                               En vivo
                             </span>
-                          )}
-                        </div>
+                          </div>
+                        )}
+                        {!isLive && isFinished && (
+                          <div className="mt-2">
+                            <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-200">
+                              Partido terminado
+                            </span>
+                          </div>
+                        )}
                       </div>
-                      <div className="text-right text-xs text-slate-300">
+                      <div className="text-right text-xs text-slate-500">
                         <p>{match.startTime ?? "N/D"}</p>
                         <p>{formatDateShort(match.scheduledDate)}</p>
                       </div>
                     </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
-                      <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-slate-200">
-                        Marcador: {score ?? "N/D"}
-                      </span>
+                    <div className="mt-4">
+                      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
+                        <div className="grid items-center gap-4 sm:grid-cols-[1fr_auto_1fr]">
+                          <div className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+                            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+                              Equipo 1
+                            </p>
+                            <p className="mt-2 truncate text-lg font-semibold text-slate-900">
+                              {teamLabel(match.teamA)}
+                            </p>
+                          </div>
+                          <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-indigo-400/30 bg-[var(--surface)] px-6 py-4 text-center shadow-[0_10px_30px_-20px_rgba(15,23,42,0.6)]">
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.35em] text-slate-500">
+                              Marcador
+                            </span>
+                            <span className="text-4xl font-bold text-slate-900">
+                              {mainScore}
+                            </span>
+                            {setLeadLabel && (
+                              <span className="text-xs font-semibold text-slate-500">
+                                {setLeadLabel}
+                              </span>
+                            )}
+                            {!setLeadLabel && detailedScore && (
+                              <span className="text-xs font-semibold text-slate-500">
+                                {detailedScore}
+                              </span>
+                            )}
+                          </div>
+                          <div className="min-w-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-right">
+                            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+                              Equipo 2
+                            </p>
+                            <p className="mt-2 truncate text-lg font-semibold text-slate-900">
+                              {teamLabel(match.teamB)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                       {match.outcomeType && match.outcomeType !== "PLAYED" && (
                         <span className="rounded-full bg-amber-400/20 px-3 py-1 text-xs text-amber-200">
                           {match.outcomeType === "WALKOVER"
@@ -1463,30 +1623,30 @@ export default function TournamentPublic({
         {tab === "prizes" && (
           <section className="mt-8 space-y-6">
             {tournament.prizes.length === 0 ? (
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-sm text-slate-300">
+              <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6 text-sm text-slate-500">
                 Premios por definir.
               </div>
             ) : (
               prizesByCategory.map((entry, index) => (
                 <div
                   key={`prize-category-${entry.category?.id ?? index}`}
-                  className="rounded-3xl border border-white/10 bg-white/5 p-6"
+                  className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p className="text-xs uppercase tracking-[0.25em] text-cyan-200/80">
                         Categoria
                       </p>
-                      <h3 className="mt-2 text-xl font-semibold text-white">
+                      <h3 className="mt-2 text-xl font-semibold text-slate-900">
                         {entry.category?.name ?? "Categoria"}
                       </h3>
                       {entry.category?.abbreviation && (
-                        <p className="mt-1 text-xs text-slate-300">
+                        <p className="mt-1 text-xs text-slate-500">
                           {entry.category.abbreviation}
                         </p>
                       )}
                     </div>
-                    <span className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-xs font-semibold text-slate-200">
+                    <span className="rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-4 py-2 text-xs font-semibold text-slate-600">
                       {entry.prizes.length} premio(s)
                     </span>
                   </div>
@@ -1495,23 +1655,23 @@ export default function TournamentPublic({
                     {entry.prizes.map((prize) => (
                       <div
                         key={prize.id}
-                        className="rounded-2xl border border-white/10 bg-white/10 p-4"
+                        className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4"
                       >
                         <div className="flex items-center justify-between gap-3">
                           <div>
-                            <p className="text-sm font-semibold text-white">
+                            <p className="text-sm font-semibold text-slate-900">
                               {describePrizePlace(prize.placeFrom, prize.placeTo)}
                             </p>
-                            <p className="mt-1 text-xs text-slate-300">
+                            <p className="mt-1 text-xs text-slate-500">
                               Desde {prize.placeFrom} hasta{" "}
                               {prize.placeTo ?? prize.placeFrom}
                             </p>
                           </div>
-                          <div className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-semibold text-slate-200">
+                          <div className="rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1 text-[11px] font-semibold text-slate-600">
                             {prize.amount ? `Bs ${prize.amount}` : "Premio"}
                           </div>
                         </div>
-                        <p className="mt-3 text-xs text-slate-300">
+                        <p className="mt-3 text-xs text-slate-500">
                           {prize.prizeText ?? "-"}
                         </p>
                       </div>
@@ -1525,9 +1685,9 @@ export default function TournamentPublic({
 
         {tab === "contact" && (
           <section className="mt-8 grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-              <h2 className="text-lg font-semibold text-white">Contacto</h2>
-              <div className="mt-4 space-y-2 text-sm text-slate-300">
+            <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6">
+              <h2 className="text-lg font-semibold text-slate-900">Contacto</h2>
+              <div className="mt-4 space-y-2 text-sm text-slate-500">
                 <p>Organiza: {tournament.league?.name ?? "N/D"}</p>
                 <p>
                   Responsable: {tournament.owner?.name ?? "Sin nombre"}
@@ -1536,9 +1696,9 @@ export default function TournamentPublic({
                 <p>Direccion: {tournament.address ?? "Sin direccion"}</p>
               </div>
             </div>
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-              <h2 className="text-lg font-semibold text-white">Ubicacion</h2>
-              <p className="mt-4 text-sm text-slate-300">
+            <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6">
+              <h2 className="text-lg font-semibold text-slate-900">Ubicacion</h2>
+              <p className="mt-4 text-sm text-slate-500">
                 Consulta las sedes y horarios en la pestaña de tiempos.
               </p>
             </div>
@@ -1546,51 +1706,6 @@ export default function TournamentPublic({
         )}
       </div>
 
-      <footer className="border-t border-white/10 bg-slate-950/90">
-        <div className="mx-auto grid w-full max-w-6xl gap-6 px-6 py-10 text-xs text-slate-300 md:grid-cols-[1.2fr_1fr_1fr]">
-          <div className="space-y-3">
-            <p className="text-sm font-semibold text-white">Soporte y contacto</p>
-            <p>
-              Si tienes problemas o quieres crear tu torneo, contacta a Miguel
-              Arteaga: <span className="text-cyan-200">+59160021284</span>
-            </p>
-            <p className="text-slate-400">Ubicacion: Santa Cruz, Bolivia</p>
-            <p className="text-slate-400">
-              ¿Quieres ser sponsor? Escribe a{" "}
-              <span className="text-cyan-200">miguelarte202@gmail.com</span>
-            </p>
-          </div>
-          <div className="space-y-3">
-            <p className="text-sm font-semibold text-white">Politicas basicas</p>
-            <ul className="space-y-2 text-slate-400">
-              <li>• Los datos se usan solo para gestionar el torneo.</li>
-              <li>• Los resultados publicados son responsabilidad del organizador.</li>
-              <li>• No compartimos informacion con terceros sin permiso.</li>
-            </ul>
-          </div>
-          <div className="space-y-3">
-            <p className="text-sm font-semibold text-white">Creado por</p>
-            <a
-              href="https://migartec.com"
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-slate-200 transition hover:border-white/20"
-            >
-              <img
-                src="https://migartec.com/logo_migartec.png"
-                alt="Migartec"
-                className="h-10 w-24 object-contain"
-              />
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
-                  Migartec
-                </p>
-                <p className="font-semibold text-white">migartec.com</p>
-              </div>
-            </a>
-          </div>
-        </div>
-      </footer>
-    </main>
+          </main>
   );
 }

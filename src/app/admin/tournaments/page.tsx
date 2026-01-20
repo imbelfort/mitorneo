@@ -63,6 +63,7 @@ export default async function TournamentsAdminPage() {
     name: tournament.name,
     sportId: tournament.sportId,
     address: tournament.address,
+    photoUrl: tournament.photoUrl,
     rankingEnabled: tournament.rankingEnabled,
     status: tournament.status,
     paymentRate: tournament.paymentRate.toString(),

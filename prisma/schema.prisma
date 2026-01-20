@@ -161,6 +161,7 @@ model Tournament {
   description          String?
   sportId              String?
   leagueId             String?
+  photoUrl             String?   @db.LongText
   address              String?
   startDate            DateTime?
   endDate              DateTime?
@@ -171,6 +172,7 @@ model Tournament {
   paymentRate          Decimal   @default(0) @db.Decimal(10, 2)
   schedulePublished    Boolean   @default(false)
   groupsPublished      Boolean   @default(false)
+  playoffsPublished    Boolean   @default(false)
   status               TournamentStatus @default(WAITING)
   ownerId              String
   createdAt            DateTime  @default(now())

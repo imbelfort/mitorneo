@@ -222,7 +222,6 @@ export default function PlayerProfilePage() {
   const age = calculateAge(dob);
   const genderLabel = genderCopy[player.gender] ?? player.gender;
   const statusLabel = statusCopy[player.status] ?? player.status;
-  const docLabel = player.documentType === "ID_CARD" ? "CI" : "Pasaporte";
   const locationLabel =
     [player.city, player.country].filter(Boolean).join(", ") || "Sin dato";
   const statsCards = [
@@ -235,12 +234,12 @@ export default function PlayerProfilePage() {
 
   return (
     <main
-      className={`${bodyFont.className} relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-amber-50 via-white to-slate-50 px-6 py-14`}
+      className={`${bodyFont.className} player-profile-page relative flex min-h-screen items-center justify-center overflow-hidden px-6 py-14`}
     >
-      <div className="pointer-events-none absolute left-1/2 top-0 h-72 w-72 -translate-x-1/2 rounded-full bg-amber-200/40 blur-[140px]" />
-      <div className="pointer-events-none absolute bottom-0 right-0 h-80 w-80 rounded-full bg-sky-200/40 blur-[160px]" />
+      <div className="player-profile-glow player-profile-glow--top pointer-events-none absolute left-1/2 top-0 h-72 w-72 -translate-x-1/2 rounded-full blur-[140px]" />
+      <div className="player-profile-glow player-profile-glow--bottom pointer-events-none absolute bottom-0 right-0 h-80 w-80 rounded-full blur-[160px]" />
 
-      <div className="w-full max-w-5xl rounded-[32px] border border-white/60 bg-white/80 p-10 shadow-[0_30px_60px_-45px_rgba(15,23,42,0.5)] backdrop-blur">
+      <div className="player-profile-shell w-full max-w-5xl rounded-[32px] border p-10 shadow-[0_30px_60px_-45px_rgba(15,23,42,0.5)] backdrop-blur">
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.45em] text-amber-600">
@@ -251,9 +250,6 @@ export default function PlayerProfilePage() {
             >
               {player.firstName} {player.lastName}
             </h1>
-            <p className="mt-2 text-sm text-slate-600">
-              Documento: {docLabel} {player.documentNumber}
-            </p>
             <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
               <span className="rounded-full bg-emerald-100 px-3 py-1 font-semibold text-emerald-700">
                 {statusLabel}
@@ -287,26 +283,37 @@ export default function PlayerProfilePage() {
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <div className="flex h-full w-full items-center justify-center text-sm text-slate-500">
-                  Sin foto
+                <div className="flex h-full w-full items-center justify-center bg-slate-100 text-slate-400">
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 64 64"
+                    className="h-20 w-20"
+                    fill="none"
+                  >
+                    <circle cx="32" cy="24" r="12" stroke="currentColor" strokeWidth="3" />
+                    <path
+                      d="M12 56c2-10 12-18 20-18s18 8 20 18"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                    />
+                  </svg>
                 </div>
               )}
             </div>
-            <div className="w-full rounded-2xl border border-slate-200/70 bg-white p-4 text-sm">
+            <div className="player-profile-card w-full rounded-2xl border p-4 text-sm">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
-                Identidad
+                Ubicacion
               </p>
               <p className="mt-3 text-sm font-semibold text-slate-900">
-                {docLabel} {player.documentNumber}
+                {locationLabel}
               </p>
-              <p className="mt-1 text-xs text-slate-500">Ubicacion</p>
-              <p className="text-sm font-semibold text-slate-900">{locationLabel}</p>
             </div>
           </div>
 
           <div className="space-y-6">
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-2xl border border-slate-200/70 bg-white p-5 shadow-sm">
+              <div className="player-profile-card rounded-2xl border p-5 shadow-sm">
                 <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
                   Fecha nacimiento
                 </p>
@@ -317,7 +324,7 @@ export default function PlayerProfilePage() {
                   {age !== null ? `${age} años` : "Edad no registrada"}
                 </p>
               </div>
-              <div className="rounded-2xl border border-slate-200/70 bg-white p-5 shadow-sm">
+              <div className="player-profile-card rounded-2xl border p-5 shadow-sm">
                 <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
                   Resumen competitivo
                 </p>
@@ -334,7 +341,7 @@ export default function PlayerProfilePage() {
               {statsCards.map((item) => (
                 <div
                   key={item.label}
-                  className="rounded-2xl border border-slate-200/60 bg-gradient-to-br from-white via-white to-amber-50/60 p-4 shadow-sm"
+                  className="player-profile-stat rounded-2xl border p-4 shadow-sm"
                 >
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
                     {item.label}
@@ -348,7 +355,7 @@ export default function PlayerProfilePage() {
           </div>
         </div>
 
-        <div className="mt-10 rounded-3xl border border-slate-200/80 bg-slate-50/70 p-6">
+        <div className="player-profile-subtle mt-10 rounded-3xl border p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">

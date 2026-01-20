@@ -1,4 +1,3 @@
-import AuthPanel from "@/components/auth/auth-panel";
 import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
 import Link from "next/link";
@@ -45,13 +44,14 @@ export default async function Home() {
         <div className="container relative z-20 mx-auto px-6 pt-20">
           <div className="max-w-3xl">
             <h1 className="animate-fade-up text-4xl font-extrabold leading-tight text-white sm:text-5xl md:text-7xl">
-              Organizá tu torneo.
+              Organiza tu torneo.
               <span className="mt-2 block bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">
-                Competí. Ganá.
+                Compite. Gana.
               </span>
             </h1>
             <p className="animate-fade-up mt-6 max-w-xl text-lg text-slate-200 delay-100">
-              Creá torneos de ráquet y frontón en minutos, gestioná jugadores, fixtures y resultados desde cualquier lugar.
+              Crea torneos de raquet y fronton en minutos, gestiona jugadores,
+              fixtures y resultados desde cualquier lugar.
             </p>
 
             <div className="animate-fade-up mt-8 flex flex-col gap-4 sm:flex-row delay-200">
@@ -78,16 +78,15 @@ export default async function Home() {
                 Ver torneos activos
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
               </Link>
+              <Link
+                href="/rankings"
+                className="group flex w-full items-center justify-center gap-2 rounded-full border border-white/30 bg-white/5 px-8 py-3.5 text-base font-bold text-white backdrop-blur-md transition-all hover:bg-white/15 hover:scale-105 active:scale-95 sm:w-auto"
+              >
+                Ver rankings
+              </Link>
             </div>
           </div>
 
-          {!session && (
-            <div className="animate-fade-up absolute bottom-24 right-6 delay-300 hidden xl:block">
-              <div className="w-[380px] rounded-2xl bg-white/10 p-4 backdrop-blur-lg shadow-2xl border border-white/20">
-                <AuthPanel session={session} />
-              </div>
-            </div>
-          )}
         </div>
       </section>
 
@@ -96,7 +95,7 @@ export default async function Home() {
         <div className="container mx-auto px-6">
           <div className="text-center mb-16">
             <h2 className="flex flex-wrap items-center justify-center text-3xl font-bold text-slate-900 sm:text-4xl">
-              ¿Qué podés hacer con
+              Que puedes hacer con
               <Image
                 src="/logo/logo2.png"
                 alt="MiTorneo"
@@ -116,17 +115,17 @@ export default async function Home() {
               {
                 icon: <Trophy className="h-8 w-8 text-indigo-600" />,
                 title: "Crear torneos",
-                desc: "Definí categorías, fechas, sedes y formato de competencia."
+                desc: "Define categorias, fechas, sedes y formato de competencia."
               },
               {
                 icon: <Users className="h-8 w-8 text-indigo-600" />,
-                title: "Gestión de jugadores",
+                title: "Gestion de jugadores",
                 desc: "Inscripciones, listas y control de participantes."
               },
               {
                 icon: <BarChart3 className="h-8 w-8 text-indigo-600" />,
                 title: "Resultados en vivo",
-                desc: "Cargá marcadores y tablas de posiciones al instante."
+                desc: "Carga marcadores y tablas de posiciones al instante."
               },
               {
                 icon: <Smartphone className="h-8 w-8 text-indigo-600" />,
@@ -158,13 +157,13 @@ export default async function Home() {
               </div>
               <h2 className="text-4xl font-bold text-white mb-6 leading-tight">
                 Pensado para <br />
-                <span className="text-indigo-400">Ráquet y Frontón</span>
+                <span className="text-indigo-400">Raquet y Fronton</span>
               </h2>
               <p className="text-slate-300 text-lg leading-relaxed mb-8">
-                MiTorneo está diseñada específicamente para respetar las reglas de juego, los formatos de competencia y las dinámicas únicas de los torneos de ráquet y frontón. Olvidate de adaptar soluciones genéricas.
+                MiTorneo esta disenado especificamente para respetar las reglas de juego, los formatos de competencia y las dinamicas unicas de los torneos de raquet y fronton. Olvidate de adaptar soluciones genericas.
               </p>
               <div className="flex flex-wrap gap-4 sm:gap-6">
-                {["Reglas oficiales", "Fixtures automáticos", "Sedes múltiples"].map((item, i) => (
+                {["Reglas oficiales", "Fixtures automaticos", "Sedes multiples"].map((item, i) => (
                   <div key={i} className="flex items-center gap-2 text-slate-200 font-medium text-sm sm:text-base">
                     <div className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
                     {item}
@@ -189,15 +188,15 @@ export default async function Home() {
       <section className="py-12 bg-slate-50 sm:py-20">
         <div className="container mx-auto px-6">
           <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-slate-900">¿Cómo funciona?</h2>
+            <h2 className="text-3xl font-bold text-slate-900">Como funciona?</h2>
             <p className="mt-4 text-slate-600">Simplicidad en cada paso del proceso</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
             {[
-              { step: "01", title: "Creá tu torneo", desc: "Configurá los detalles básicos y categorías." },
-              { step: "02", title: "Inscribí jugadores", desc: "Habilitá el registro o carga manual." },
-              { step: "03", title: "Jugá y publicá", desc: "Generá cruces y actualizá resultados." }
+              { step: "01", title: "Crea tu torneo", desc: "Configura los detalles basicos y categorias." },
+              { step: "02", title: "Inscribe jugadores", desc: "Habilita el registro o carga manual." },
+              { step: "03", title: "Juega y publica", desc: "Genera cruces y actualiza resultados." }
             ].map((step, idx) => (
               <div key={idx} className="relative p-8 bg-white rounded-2xl shadow-sm border border-slate-100">
                 <div className="text-6xl font-black text-slate-100 absolute top-4 right-4 select-none">
@@ -218,7 +217,7 @@ export default async function Home() {
         <div className="container mx-auto px-6">
           <div className="flex flex-col md:flex-row justify-between items-end mb-12 gap-4">
             <div>
-              <h2 className="text-3xl font-bold text-slate-900">Últimos torneos</h2>
+              <h2 className="text-3xl font-bold text-slate-900">Ultimos torneos</h2>
               <p className="mt-2 text-slate-600">Eventos recientes en la plataforma</p>
             </div>
             <Link href="/tournaments" className="text-indigo-600 font-semibold hover:text-indigo-700 flex items-center gap-1">

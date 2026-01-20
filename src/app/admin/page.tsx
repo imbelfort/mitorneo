@@ -1,17 +1,16 @@
 import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import {
+    ArrowRight,
+    Dumbbell,
+    Layers,
+    ShieldCheck,
+    Trophy,
+    Users
+} from "lucide-react";
 import { getServerSession } from "next-auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import {
-    Trophy,
-    Users,
-    Layers,
-    Dumbbell,
-    Settings,
-    ArrowRight,
-    ShieldCheck
-} from "lucide-react";
-import { prisma } from "@/lib/prisma";
 
 export default async function AdminDashboard() {
     const session = await getServerSession(authOptions);
@@ -143,12 +142,22 @@ export default async function AdminDashboard() {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
-                                                    <Link
-                                                        href={`/admin/tournaments/${tournament.id}`}
-                                                        className="font-medium text-indigo-600 hover:text-indigo-900"
-                                                    >
-                                                        Gestionar
-                                                    </Link>
+                                                    <div className="flex items-center justify-end gap-3">
+                                                        <Link
+                                                            href={`/tournaments/${tournament.id}`}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="font-medium text-indigo-600 hover:text-indigo-900"
+                                                        >
+                                                            link del Torneo
+                                                        </Link>
+                                                        <Link
+                                                            href={`/admin/tournaments?open=${tournament.id}`}
+                                                            className="font-medium text-indigo-600 hover:text-indigo-900"
+                                                        >
+                                                            Gestionar
+                                                        </Link>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}

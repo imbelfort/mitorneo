@@ -69,6 +69,7 @@ type FixtureResponse = {
   matches: Match[];
   groupQualifiers?: GroupQualifier[];
   tournamentStatus?: "WAITING" | "ACTIVE" | "FINISHED";
+  playoffsPublished?: boolean;
   sessionRole?: "ADMIN" | "TOURNAMENT_ADMIN";
   groupPoints?: {
     winPoints?: number;
@@ -234,6 +235,8 @@ export default function TournamentPlayoffs({
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [finishing, setFinishing] = useState(false);
+  const [playoffsPublished, setPlayoffsPublished] = useState(false);
+  const [publishingPlayoffs, setPublishingPlayoffs] = useState(false);
   const [tournamentStatus, setTournamentStatus] = useState<
     "WAITING" | "ACTIVE" | "FINISHED"
   >("WAITING");
@@ -267,6 +270,7 @@ export default function TournamentPlayoffs({
     if (data.tournamentStatus) {
       setTournamentStatus(data.tournamentStatus);
     }
+    setPlayoffsPublished(Boolean(data.playoffsPublished));
     if (data.sessionRole) {
       setSessionRole(data.sessionRole);
     }
@@ -688,6 +692,39 @@ export default function TournamentPlayoffs({
     }
   };
 
+  const togglePlayoffsPublished = async () => {
+    if (publishingPlayoffs) return;
+    setPublishingPlayoffs(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/tournaments/${tournamentId}/playoffs/publish`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ playoffsPublished: !playoffsPublished }),
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const detail = data?.detail ? ` (${data.detail})` : "";
+        throw new Error(
+          `${data?.error ?? "No se pudo actualizar la publicacion"}${detail}`
+        );
+      }
+      setPlayoffsPublished(Boolean(data?.playoffsPublished));
+      setMessage(
+        data?.playoffsPublished
+          ? "Llaves publicadas."
+          : "Llaves ocultas del publico."
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo publicar");
+    } finally {
+      setPublishingPlayoffs(false);
+    }
+  };
+
   const hasExistingPlayoffs =
     Array.from(playoffMatchesByCategory.values()).flat().length > 0;
 
@@ -708,6 +745,24 @@ export default function TournamentPlayoffs({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {(sessionRole === "ADMIN" || sessionRole === "TOURNAMENT_ADMIN") && (
+              <button
+                type="button"
+                onClick={togglePlayoffsPublished}
+                disabled={publishingPlayoffs}
+                className={`inline-flex items-center justify-center rounded-full px-4 py-2 text-xs font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-70 ${
+                  playoffsPublished
+                    ? "bg-slate-900 text-white hover:bg-slate-800"
+                    : "bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                {publishingPlayoffs
+                  ? "Actualizando..."
+                  : playoffsPublished
+                    ? "Ocultar llaves"
+                    : "Publicar llaves"}
+              </button>
+            )}
             {tournamentStatus === "ACTIVE" &&
               (sessionRole === "ADMIN" || sessionRole === "TOURNAMENT_ADMIN") &&
               allMatchesComplete && (

@@ -283,6 +283,7 @@ export async function POST(request: Request) {
     endDate,
     registrationDeadline,
     rulesText,
+    photoUrl,
     playDays,
     categoryEntries,
     sponsors,
@@ -297,6 +298,7 @@ export async function POST(request: Request) {
     endDate?: unknown;
     registrationDeadline?: unknown;
     rulesText?: unknown;
+    photoUrl?: unknown;
     playDays?: unknown;
     categoryEntries?: unknown;
     sponsors?: unknown;
@@ -464,6 +466,10 @@ export async function POST(request: Request) {
     typeof rulesText === "string" && rulesText.trim().length > 0
       ? rulesText.trim()
       : null;
+  const photoUrlValue =
+    typeof photoUrl === "string" && photoUrl.trim().length > 0
+      ? photoUrl.trim()
+      : null;
 
   const settings =
     (await prisma.globalSetting.findUnique({
@@ -486,6 +492,7 @@ export async function POST(request: Request) {
         endDate: end,
         registrationDeadline: registration,
         rulesText: rulesValue,
+        photoUrl: photoUrlValue,
         playDays: normalizedDays,
         ownerId: session.user.id,
         clubs: {

@@ -69,7 +69,7 @@ export default async function RootLayout({
     <html lang="es" suppressHydrationWarning>
       <body
         suppressHydrationWarning
-        className={`${geistSans.variable} ${geistMono.variable} bg-slate-50 text-slate-900 antialiased overflow-x-hidden`}
+        className={`${geistSans.variable} ${geistMono.variable} bg-[var(--background)] text-[var(--foreground)] antialiased overflow-x-hidden`}
       >
         <Providers session={session}>
           <HeaderBar />

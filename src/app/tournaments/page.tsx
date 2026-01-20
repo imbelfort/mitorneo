@@ -12,6 +12,22 @@ const formatDate = (date: Date) => {
     }).format(date);
 };
 
+const FALLBACK_PHOTOS = [
+    "/hero/fotouno.jpeg",
+    "/hero/fotodos.jpeg",
+    "/hero/fototres.jpeg",
+    "/hero/fotocuatro.jpeg",
+];
+
+const pickFallbackPhoto = (seed: string) => {
+    if (!seed) return FALLBACK_PHOTOS[0];
+    let total = 0;
+    for (let i = 0; i < seed.length; i += 1) {
+        total += seed.charCodeAt(i);
+    }
+    return FALLBACK_PHOTOS[total % FALLBACK_PHOTOS.length];
+};
+
 export default async function TournamentsPage({
     searchParams,
 }: {
@@ -151,7 +167,11 @@ export default async function TournamentsPage({
                             >
                                 <div className="relative h-48 w-full bg-slate-100">
                                     <Image
-                                        src={tournament.league?.photoUrl || "/hero/fototres.jpeg"}
+                                        src={
+                                            tournament.photoUrl ||
+                                            tournament.league?.photoUrl ||
+                                            pickFallbackPhoto(tournament.id)
+                                        }
                                         alt={tournament.name}
                                         fill
                                         className="object-cover transition-transform duration-500 group-hover:scale-105"

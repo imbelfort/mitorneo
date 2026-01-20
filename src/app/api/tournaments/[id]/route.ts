@@ -299,6 +299,7 @@ export async function PATCH(
     endDate,
     registrationDeadline,
     rulesText,
+    photoUrl,
     playDays,
     categoryEntries,
     sponsors,
@@ -313,6 +314,7 @@ export async function PATCH(
     endDate?: unknown;
     registrationDeadline?: unknown;
     rulesText?: unknown;
+    photoUrl?: unknown;
     playDays?: unknown;
     categoryEntries?: unknown;
     sponsors?: unknown;
@@ -480,6 +482,10 @@ export async function PATCH(
     typeof rulesText === "string" && rulesText.trim().length > 0
       ? rulesText.trim()
       : null;
+  const photoUrlValue =
+    typeof photoUrl === "string" && photoUrl.trim().length > 0
+      ? photoUrl.trim()
+      : null;
 
   try {
     const updated = await prisma.tournament.update({
@@ -494,6 +500,7 @@ export async function PATCH(
         endDate: end,
         registrationDeadline: registration,
         rulesText: rulesValue,
+        photoUrl: photoUrlValue,
         playDays: normalizedDays,
         clubs: {
           deleteMany: {},

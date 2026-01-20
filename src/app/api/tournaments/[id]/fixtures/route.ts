@@ -69,6 +69,7 @@ export async function GET(
       status: true,
       paymentRate: true,
       groupsPublished: true,
+      playoffsPublished: true,
     },
   });
 
@@ -196,6 +197,7 @@ export async function GET(
     tournamentStatus: tournament.status,
     paymentRate: tournament.paymentRate.toString(),
     groupsPublished: tournament.groupsPublished,
+    playoffsPublished: tournament.playoffsPublished,
     sessionRole: session.user.role,
     playDays,
     groupPoints: {
