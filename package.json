@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "cross-env NEXT_TURBOPACK_USE_WORKER=0 next build",
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate",
@@ -33,6 +33,7 @@
     "react-dom": "19.2.3"
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "@types/bcryptjs": "^3.0.0",
     "@types/node": "^20",
     "@types/pdfkit": "^0.17.4",
