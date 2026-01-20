@@ -1,8 +1,3 @@
-"use client";
-
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-
 export default function NotFound() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
