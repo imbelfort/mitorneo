@@ -10,7 +10,7 @@ if (!databaseUrl) {
 
 const migrateResult = spawnSync(
   "npx",
-  ["prisma", "migrate", "deploy"],
+  ["prisma", "db", "push", "--skip-generate"],
   { stdio: "inherit" }
 );
 

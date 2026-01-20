@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -161,7 +161,7 @@ model Tournament {
   description          String?
   sportId              String?
   leagueId             String?
-  photoUrl             String?   @db.LongText
+  photoUrl             String?   @db.Text
   address              String?
   startDate            DateTime?
   endDate              DateTime?
@@ -196,7 +196,7 @@ model Tournament {
 model GlobalSetting {
   id                 String   @id @default("default")
   paymentRateDefault Decimal  @default(0) @db.Decimal(10, 2)
-  paymentQrUrl       String?  @db.MediumText
+  paymentQrUrl       String?  @db.Text
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 }
@@ -218,8 +218,8 @@ model TournamentSponsor {
   id           String   @id @default(cuid())
   tournamentId String
   name         String?
-  imageUrl     String   @db.MediumText
-  linkUrl      String?  @db.MediumText
+  imageUrl     String   @db.Text
+  linkUrl      String?  @db.Text
   sortOrder    Int      @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -475,7 +475,7 @@ model League {
   id          String       @id @default(cuid())
   name        String       @unique
   description String?
-  photoUrl    String?      @db.LongText
+  photoUrl    String?      @db.Text
   ownerId     String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
