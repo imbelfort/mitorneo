@@ -1,11 +1,7 @@
-"use client";
-
 export default function GlobalError({
   error,
-  reset,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
 }) {
   return (
     <html lang="es">
@@ -26,16 +22,9 @@ export default function GlobalError({
             </p>
           )}
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-            <button
-              type="button"
-              onClick={reset}
-              className="rounded-full bg-white px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-900 transition hover:bg-slate-200"
-            >
-              Reintentar
-            </button>
             <a
               href="/"
-              className="rounded-full border border-white/10 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white transition hover:border-white/30"
+              className="rounded-full bg-white px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-900 transition hover:bg-slate-200"
             >
               Volver al inicio
             </a>
