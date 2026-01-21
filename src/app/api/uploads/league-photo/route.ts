@@ -3,8 +3,10 @@ import { NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
 import crypto from "crypto";
+import { processImageUpload } from "@/lib/image-upload";
 
 const MAX_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
+const MAX_INPUT_BYTES = 10 * 1024 * 1024;
 
 export async function POST(request: Request) {
   const session = await getServerSession();
@@ -22,19 +24,32 @@ export async function POST(request: Request) {
   if (!file.type.startsWith("image/")) {
     return NextResponse.json({ error: "Solo se permiten imagenes" }, { status: 400 });
   }
-
-  if (file.size > MAX_SIZE_BYTES) {
-    return NextResponse.json({ error: "La imagen debe pesar maximo 2MB" }, { status: 400 });
+  if (file.size > MAX_INPUT_BYTES) {
+    return NextResponse.json(
+      { error: "La imagen supera el limite de 10MB" },
+      { status: 400 }
+    );
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const ext = path.extname(file.name) || ".jpg";
-  const filename = `${crypto.randomUUID()}${ext}`;
+  const processed = await processImageUpload(buffer, {
+    kind: "photo",
+    mime: file.type,
+  });
+
+  if (processed.buffer.length > MAX_SIZE_BYTES) {
+    return NextResponse.json(
+      { error: "La imagen debe pesar maximo 2MB" },
+      { status: 400 }
+    );
+  }
+
+  const filename = `${crypto.randomUUID()}${processed.ext}`;
   const uploadsDir = path.join(process.cwd(), "public", "uploads");
   const filePath = path.join(uploadsDir, filename);
 
   await fs.mkdir(uploadsDir, { recursive: true });
-  await fs.writeFile(filePath, buffer);
+  await fs.writeFile(filePath, processed.buffer);
 
   const url = `/uploads/${filename}`;
 

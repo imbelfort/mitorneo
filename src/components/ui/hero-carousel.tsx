@@ -10,6 +10,7 @@ const images = [
     "/hero/fotodos.jpeg",
     "/hero/fototres.jpeg",
     "/hero/fotocuatro.jpeg",
+    "/hero/fotocinco.jpeg",
 ];
 
 export default function HeroCarousel() {

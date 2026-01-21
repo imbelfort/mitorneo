@@ -21,6 +21,34 @@ const formatDate = (date: Date | null) => {
   }).format(date);
 };
 
+const SPORT_FALLBACK_COUNTS: Record<string, number> = {
+  raquet: 3,
+  fronton: 2,
+  padel: 1,
+  squash: 1,
+  tenis: 1,
+};
+
+const getSportFolder = (name?: string | null) => {
+  if (!name) return null;
+  const normalized = name.toLowerCase().replace(/\s+/g, "");
+  if (normalized === "racquetball" || normalized === "raquetball") return "raquet";
+  if (normalized === "fronton") return "fronton";
+  if (normalized === "padel") return "padel";
+  if (normalized === "tenis") return "tenis";
+  if (normalized === "squash") return "squash";
+  return null;
+};
+
+const pickSportFallbackPhoto = (sportName?: string | null) => {
+  const folder = getSportFolder(sportName);
+  if (!folder) return null;
+  const count = SPORT_FALLBACK_COUNTS[folder];
+  if (!count) return null;
+  const index = Math.floor(Math.random() * count) + 1;
+  return `/sports/${folder}/${index}.jpg`;
+};
+
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -112,27 +140,42 @@ export default async function Home() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {[
               {
+                image: "/hero/fotouno.jpeg",
                 icon: <Trophy className="h-8 w-8 text-indigo-600" />,
                 title: "Crear torneos",
                 desc: "Define categorias, fechas, sedes y formato de competencia."
               },
               {
+                image: "/hero/fotodos.jpeg",
                 icon: <Users className="h-8 w-8 text-indigo-600" />,
                 title: "Gestion de jugadores",
                 desc: "Inscripciones, listas y control de participantes."
               },
               {
+                image: "/hero/fototres.jpeg",
                 icon: <BarChart3 className="h-8 w-8 text-indigo-600" />,
                 title: "Resultados en vivo",
                 desc: "Carga marcadores y tablas de posiciones al instante."
               },
               {
+                image: "/hero/fotocinco.jpeg",
                 icon: <Smartphone className="h-8 w-8 text-indigo-600" />,
                 title: "Multiplataforma",
                 desc: "Acceso optimizado desde cualquier dispositivo."
               }
             ].map((feature, idx) => (
               <div key={idx} className="group rounded-2xl p-6 sm:p-8 bg-slate-50 border border-slate-100 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                <div className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <div className="relative h-28 w-full">
+                    <Image
+                      src={feature.image}
+                      alt={feature.title}
+                      fill
+                      className="object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 to-transparent" />
+                  </div>
+                </div>
                 <div className="mb-6 h-14 w-14 rounded-2xl bg-indigo-50 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
                   {feature.icon}
                 </div>
@@ -230,7 +273,11 @@ export default async function Home() {
                 <div key={tour.id} className="group overflow-hidden rounded-2xl bg-white border border-slate-200 hover:shadow-lg transition-all">
                   <div className="h-40 bg-slate-100 relative">
                     <Image
-                      src={`/hero/fototres.jpeg`}
+                      src={
+                        tour.photoUrl ||
+                        pickSportFallbackPhoto(tour.sport?.name) ||
+                        "/hero/fototres.jpeg"
+                      }
                       alt={tour.name}
                       fill
                       className="object-cover transition-transform duration-500 group-hover:scale-110"

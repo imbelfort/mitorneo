@@ -157,6 +157,34 @@ const FALLBACK_TOURNAMENT_PHOTOS = [
   "/hero/fotocuatro.jpeg",
 ];
 
+const getSportFolder = (name?: string | null) => {
+  if (!name) return null;
+  const normalized = name.toLowerCase().replace(/\s+/g, "");
+  if (normalized === "racquetball" || normalized === "raquetball") return "raquet";
+  if (normalized === "fronton") return "fronton";
+  if (normalized === "padel") return "padel";
+  if (normalized === "tenis") return "tenis";
+  if (normalized === "squash") return "squash";
+  return null;
+};
+
+const SPORT_FALLBACK_COUNTS: Record<string, number> = {
+  raquet: 3,
+  fronton: 2,
+  padel: 1,
+  squash: 1,
+  tenis: 1,
+};
+
+const pickSportFallbackPhoto = (sportName?: string | null) => {
+  const folder = getSportFolder(sportName);
+  if (!folder) return null;
+  const count = SPORT_FALLBACK_COUNTS[folder];
+  if (!count) return null;
+  const index = Math.floor(Math.random() * count) + 1;
+  return `/sports/${folder}/${index}.jpg`;
+};
+
 const pickFallbackTournamentPhoto = (seed: string) => {
   if (!seed) return FALLBACK_TOURNAMENT_PHOTOS[0];
   let total = 0;
@@ -781,8 +809,15 @@ export default function TournamentPublic({
   const tournamentPhoto = useMemo(() => {
     if (tournament.photoUrl) return tournament.photoUrl;
     if (tournament.league?.photoUrl) return tournament.league.photoUrl;
+    const sportFallback = pickSportFallbackPhoto(tournament.sport?.name);
+    if (sportFallback) return sportFallback;
     return pickFallbackTournamentPhoto(tournament.id);
-  }, [tournament.id, tournament.league?.photoUrl, tournament.photoUrl]);
+  }, [
+    tournament.id,
+    tournament.league?.photoUrl,
+    tournament.photoUrl,
+    tournament.sport?.name,
+  ]);
   const showLeagueInfo = Boolean(tournament.rankingEnabled && tournament.league);
 
   return (

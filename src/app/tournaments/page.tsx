@@ -20,12 +20,40 @@ const FALLBACK_PHOTOS = [
 ];
 
 const pickFallbackPhoto = (seed: string) => {
-    if (!seed) return FALLBACK_PHOTOS[0];
-    let total = 0;
-    for (let i = 0; i < seed.length; i += 1) {
-        total += seed.charCodeAt(i);
-    }
-    return FALLBACK_PHOTOS[total % FALLBACK_PHOTOS.length];
+  if (!seed) return FALLBACK_PHOTOS[0];
+  let total = 0;
+  for (let i = 0; i < seed.length; i += 1) {
+    total += seed.charCodeAt(i);
+  }
+  return FALLBACK_PHOTOS[total % FALLBACK_PHOTOS.length];
+};
+
+const getSportFolder = (name?: string | null) => {
+  if (!name) return null;
+  const normalized = name.toLowerCase().replace(/\s+/g, "");
+  if (normalized === "racquetball" || normalized === "raquetball") return "raquet";
+  if (normalized === "fronton") return "fronton";
+  if (normalized === "padel") return "padel";
+  if (normalized === "tenis") return "tenis";
+  if (normalized === "squash") return "squash";
+  return null;
+};
+
+const SPORT_FALLBACK_COUNTS: Record<string, number> = {
+  raquet: 3,
+  fronton: 2,
+  padel: 1,
+  squash: 1,
+  tenis: 1,
+};
+
+const pickSportFallbackPhoto = (sportName?: string | null) => {
+  const folder = getSportFolder(sportName);
+  if (!folder) return null;
+  const count = SPORT_FALLBACK_COUNTS[folder];
+  if (!count) return null;
+  const index = Math.floor(Math.random() * count) + 1;
+  return `/sports/${folder}/${index}.jpg`;
 };
 
 export default async function TournamentsPage({
@@ -163,6 +191,7 @@ export default async function TournamentsPage({
                             const imageUrl =
                                 tournament.photoUrl ||
                                 tournament.league?.photoUrl ||
+                                pickSportFallbackPhoto(tournament.sport?.name) ||
                                 pickFallbackPhoto(tournament.id);
 
                             return (
