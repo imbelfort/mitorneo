@@ -36,7 +36,15 @@ export default function HeaderBar() {
               alt="Mi Torneo"
               width={180}
               height={54}
-              className="h-9 w-auto object-contain sm:h-10"
+              className="logo-light h-9 w-auto object-contain sm:h-10"
+              priority
+            />
+            <Image
+              src="/logo/logo%20dark.png"
+              alt="Mi Torneo"
+              width={180}
+              height={54}
+              className="logo-dark h-9 w-auto object-contain sm:h-10"
               priority
             />
           </Link>
@@ -116,7 +124,15 @@ export default function HeaderBar() {
               alt="Mi Torneo"
               width={200}
               height={60}
-              className="h-10 w-auto object-contain sm:h-14"
+              className="logo-light h-10 w-auto object-contain sm:h-14"
+              priority
+            />
+            <Image
+              src="/logo/logo%20dark.png"
+              alt="Mi Torneo"
+              width={200}
+              height={60}
+              className="logo-dark h-10 w-auto object-contain sm:h-14"
               priority
             />
           </Link>

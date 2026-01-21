@@ -78,7 +78,15 @@ export default function RegisterPage() {
                             alt="MiTorneo"
                             width={240}
                             height={80}
-                            className="h-12 w-auto object-contain sm:h-16"
+                            className="logo-light h-12 w-auto object-contain sm:h-16"
+                            priority
+                        />
+                        <Image
+                            src="/logo/logoletrablanca.png"
+                            alt="MiTorneo"
+                            width={240}
+                            height={80}
+                            className="logo-dark h-12 w-auto object-contain sm:h-16"
                             priority
                         />
                     </Link>

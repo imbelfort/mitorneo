@@ -123,13 +123,22 @@ export default async function Home() {
           <div className="text-center mb-16">
             <h2 className="flex flex-wrap items-center justify-center text-3xl font-bold text-slate-900 sm:text-4xl">
               Que puedes hacer con
-              <Image
-                src="/logo/logo2.png"
-                alt="MiTorneo"
-                width={200}
-                height={60}
-                className="mx-2 h-12 w-auto object-contain sm:h-16"
-              />
+              <span className="mx-2 inline-flex items-center">
+                <Image
+                  src="/logo/logo2.png"
+                  alt="MiTorneo"
+                  width={200}
+                  height={60}
+                  className="logo-light h-12 w-auto object-contain sm:h-16"
+                />
+                <Image
+                  src="/logo/logoletrablanca.png"
+                  alt="MiTorneo"
+                  width={200}
+                  height={60}
+                  className="logo-dark h-12 w-auto object-contain sm:h-16"
+                />
+              </span>
               <span className="-ml-2">?</span>
             </h2>
             <p className="mt-4 text-lg text-slate-600">

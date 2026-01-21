@@ -52,6 +52,23 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+.logo-light,
+.logo-dark {
+  display: inline-block;
+}
+
+.logo-dark {
+  display: none;
+}
+
+.theme-dark .logo-light {
+  display: none;
+}
+
+.theme-dark .logo-dark {
+  display: inline-block;
+}
+
 .theme-dark .bg-white {
   background-color: var(--surface);
 }

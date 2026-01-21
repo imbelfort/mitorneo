@@ -17,7 +17,14 @@ export default function Footer() {
                                 alt="MiTorneo"
                                 width={240}
                                 height={80}
-                                className="h-12 w-auto object-contain sm:h-16"
+                                className="logo-light h-12 w-auto object-contain sm:h-16"
+                            />
+                            <Image
+                                src="/logo/logo%20dark.png"
+                                alt="MiTorneo"
+                                width={240}
+                                height={80}
+                                className="logo-dark h-12 w-auto object-contain sm:h-16"
                             />
                         </div>
                         <p className="text-sm leading-relaxed text-slate-500">

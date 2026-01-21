@@ -49,9 +49,17 @@ export default function LoginPage() {
                   alt="MiTorneo"
                   width={220}
                   height={70}
-                  className="h-10 w-auto object-contain sm:h-14"
+                  className="logo-light h-10 w-auto object-contain sm:h-14"
                   priority
                 />
+              <Image
+                src="/logo/logoletrablanca.png"
+                alt="MiTorneo"
+                width={220}
+                height={70}
+                className="logo-dark h-10 w-auto object-contain sm:h-14"
+                priority
+              />
               </Link>
               <div>
                 <h1 className="text-2xl font-bold">Inicia sesion</h1>
