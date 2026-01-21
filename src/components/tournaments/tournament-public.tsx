@@ -1109,31 +1109,33 @@ export default function TournamentPublic({
                         <div className="bg-[var(--surface-2)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">
                           Grupo {group.key}
                         </div>
-                        <table className="min-w-full text-xs text-slate-600">
-                          <thead className="bg-[var(--surface)] uppercase tracking-[0.2em] text-slate-500">
-                            <tr>
-                              <th className="px-3 py-2 text-left">Ranking</th>
-                              <th className="px-3 py-2 text-left">Jugador/Equipo</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-white/5">
-                            {group.list.map((registration) => (
-                              <tr key={registration.id}>
-                                <td className="px-3 py-2">
-                                  {registration.rankingNumber ?? "-"}
-                                </td>
-                                <td className="px-3 py-2">
-                                  <p className="font-semibold text-slate-900">
-                                    {teamLabel(registration)}
-                                  </p>
-                                  <p className="mt-1 text-[11px] text-slate-500">
-                                    {teamMembersLabel(registration)}
-                                  </p>
-                                </td>
+                        <div className="overflow-x-auto">
+                          <table className="min-w-[420px] text-xs text-slate-600">
+                            <thead className="bg-[var(--surface)] uppercase tracking-[0.2em] text-slate-500">
+                              <tr>
+                                <th className="px-3 py-2 text-left">Ranking</th>
+                                <th className="px-3 py-2 text-left">Jugador/Equipo</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                            </thead>
+                            <tbody className="divide-y divide-white/5">
+                              {group.list.map((registration) => (
+                                <tr key={registration.id}>
+                                  <td className="px-3 py-2">
+                                    {registration.rankingNumber ?? "-"}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <p className="font-semibold text-slate-900">
+                                      {teamLabel(registration)}
+                                    </p>
+                                    <p className="mt-1 text-[11px] text-slate-500">
+                                      {teamMembersLabel(registration)}
+                                    </p>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1160,8 +1162,8 @@ export default function TournamentPublic({
                     ? "Sin fecha asignada"
                     : formatDateLong(dateKey)}
                 </h3>
-                <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--border)]">
-                  <table className="min-w-full text-xs text-slate-600">
+                <div className="mt-4 overflow-x-auto rounded-2xl border border-[var(--border)]">
+                  <table className="min-w-[900px] text-xs text-slate-600">
                     <thead className="bg-[var(--surface-2)] uppercase tracking-[0.2em] text-slate-500">
                       <tr>
                         <th className="px-3 py-2 text-left">Hora</th>
@@ -1350,25 +1352,26 @@ export default function TournamentPublic({
                           <div className="bg-[var(--surface-2)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">
                             Grupo {group.key}
                           </div>
-                          <table className="w-full text-[11px] text-slate-600">
-                            <thead className="bg-[var(--surface)] uppercase tracking-[0.2em] text-slate-500">
-                              <tr>
-                                <th className="px-3 py-2 text-left">Pos</th>
-                                <th className="px-3 py-2 text-left">Jugador/Equipo</th>
-                                <th className="px-3 py-2 text-left">PJ</th>
-                                <th className="px-3 py-2 text-left">PG</th>
-                                <th className="px-3 py-2 text-left">PP</th>
-                                <th className="px-3 py-2 text-left">Pts</th>
-                                <th className="px-3 py-2 text-left">SG</th>
-                                <th className="px-3 py-2 text-left">SP</th>
-                                <th className="px-3 py-2 text-left">DS</th>
-                                <th className="px-3 py-2 text-left">PF</th>
-                                <th className="px-3 py-2 text-left">PC</th>
-                                <th className="px-3 py-2 text-left">DP</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-white/5">
-                              {group.entries.map((entryItem, index) => {
+                          <div className="overflow-x-auto">
+                            <table className="min-w-[900px] text-[11px] text-slate-600">
+                              <thead className="bg-[var(--surface)] uppercase tracking-[0.2em] text-slate-500">
+                                <tr>
+                                  <th className="px-3 py-2 text-left">Pos</th>
+                                  <th className="px-3 py-2 text-left">Jugador/Equipo</th>
+                                  <th className="px-3 py-2 text-left">PJ</th>
+                                  <th className="px-3 py-2 text-left">PG</th>
+                                  <th className="px-3 py-2 text-left">PP</th>
+                                  <th className="px-3 py-2 text-left">Pts</th>
+                                  <th className="px-3 py-2 text-left">SG</th>
+                                  <th className="px-3 py-2 text-left">SP</th>
+                                  <th className="px-3 py-2 text-left">DS</th>
+                                  <th className="px-3 py-2 text-left">PF</th>
+                                  <th className="px-3 py-2 text-left">PC</th>
+                                  <th className="px-3 py-2 text-left">DP</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-white/5">
+                                {group.entries.map((entryItem, index) => {
                                 const registration = registrationById.get(entryItem.id);
                                 const setsDiff =
                                   entryItem.setsWon - entryItem.setsLost;
@@ -1396,9 +1399,10 @@ export default function TournamentPublic({
                                     <td className="px-3 py-2">{pointsDiff}</td>
                                   </tr>
                                 );
-                              })}
-                            </tbody>
-                          </table>
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
                       ))}
                     </div>

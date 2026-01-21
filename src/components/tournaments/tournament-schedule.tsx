@@ -1531,9 +1531,9 @@ const renderTeamDisplay = (
                 <p className="text-sm text-slate-500">
                   Todos los partidos tienen horario asignado.
                 </p>
-              ) : (
-                <div className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
-                  <table className="min-w-full divide-y divide-slate-200/70 text-xs">
+                ) : (
+                  <div className="overflow-x-auto rounded-2xl border border-slate-200/70 bg-white">
+                    <table className="min-w-[640px] divide-y divide-slate-200/70 text-xs">
                     <thead className="bg-slate-50/80 text-[10px] uppercase tracking-[0.18em] text-slate-500">
                       <tr>
                         <th className="px-3 py-3 text-left font-semibold">
@@ -1742,9 +1742,9 @@ const renderTeamDisplay = (
                       <p className="mt-3 text-sm text-slate-500">
                         No hay horarios disponibles para este dia.
                       </p>
-                    ) : (
-                      <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200/70 bg-white">
-                        <table className="print-table min-w-full divide-y divide-slate-200/70 text-xs">
+                      ) : (
+                        <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200/70 bg-white">
+                          <table className="print-table min-w-[640px] divide-y divide-slate-200/70 text-xs">
                           <thead className="bg-slate-50/80 text-[10px] uppercase tracking-[0.18em] text-slate-500">
                             <tr>
                               <th className="px-3 py-3 text-left font-semibold">
@@ -2156,8 +2156,8 @@ const renderTeamDisplay = (
                 </div>
               </div>
 
-              <div className="overflow-hidden rounded-2xl border border-slate-200">
-                <table className="min-w-full divide-y divide-slate-200/70 text-xs">
+                <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                  <table className="min-w-[640px] divide-y divide-slate-200/70 text-xs">
                   <thead className="bg-slate-50/80 text-[10px] uppercase tracking-[0.18em] text-slate-500">
                     <tr>
                       <th className="px-3 py-3 text-left font-semibold">

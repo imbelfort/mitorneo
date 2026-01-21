@@ -18,8 +18,8 @@ type Player = {
   dateOfBirth: string | Date | null;
   phone: string | null;
   gender: Gender;
-  city: string | null;
   country: string | null;
+  city: string | null;
   photoUrl: string | null;
   status: PlayerStatus;
   createdById?: string | null;
@@ -404,25 +404,6 @@ export default function PlayersManager({
             </select>
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">Ciudad</label>
-            <select
-              value={form.city}
-              onChange={(e) => updateField("city", e.target.value)}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-            >
-              <option value="">Selecciona ciudad</option>
-              {cityOptions.length > 0 ? (
-                cityOptions.map((city) => (
-                  <option key={city} value={city}>
-                    {city}
-                  </option>
-                ))
-              ) : (
-                <option value="Otra">Otra</option>
-              )}
-            </select>
-          </div>
-          <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">Pais</label>
             <select
               value={form.country}
@@ -444,6 +425,25 @@ export default function PlayersManager({
                   {country}
                 </option>
               ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">Ciudad</label>
+            <select
+              value={form.city}
+              onChange={(e) => updateField("city", e.target.value)}
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+            >
+              <option value="">Selecciona ciudad</option>
+              {cityOptions.length > 0 ? (
+                cityOptions.map((city) => (
+                  <option key={city} value={city}>
+                    {city}
+                  </option>
+                ))
+              ) : (
+                <option value="Otra">Otra</option>
+              )}
             </select>
           </div>
           <div className="space-y-2">
@@ -542,9 +542,9 @@ export default function PlayersManager({
         </div>
         {filteredPlayers.length === 0 ? (
           <p className="mt-2 text-sm text-slate-600">No hay jugadores registrados.</p>
-        ) : (
-          <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200/70 bg-white/80 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.2)]">
-            <table className="min-w-full divide-y divide-slate-200/70 text-sm">
+          ) : (
+            <div className="mt-3 overflow-x-auto rounded-2xl border border-slate-200/70 bg-white/80 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.2)]">
+              <table className="min-w-[640px] divide-y divide-slate-200/70 text-sm">
               <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.2em] text-slate-500">
                 <tr>
                   <th className="px-3 py-3 text-left font-semibold text-slate-700">Jugador</th>

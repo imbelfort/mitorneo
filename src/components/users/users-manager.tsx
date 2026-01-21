@@ -290,8 +290,8 @@ export default function UsersManager({ initialUsers }: { initialUsers: AdminUser
           />
         </div>
 
-        <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
-          <table className="min-w-full text-sm text-slate-700">
+        <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
+          <table className="min-w-[640px] text-sm text-slate-700">
             <thead className="bg-slate-50 text-xs uppercase tracking-[0.2em] text-slate-500">
               <tr>
                 <th className="px-4 py-3 text-left">Nombre</th>

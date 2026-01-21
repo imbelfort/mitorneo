@@ -55,7 +55,7 @@ export default function ResetPasswordPage() {
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-12">
       <div className="mx-auto w-full max-w-md">
-        <div className="rounded-3xl bg-white p-8 shadow-sm ring-1 ring-slate-200">
+        <div className="rounded-3xl bg-white p-6 sm:p-8 shadow-sm ring-1 ring-slate-200">
           <h1 className="text-2xl font-semibold text-slate-900">
             Restablecer contrasena
           </h1>

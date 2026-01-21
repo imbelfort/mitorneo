@@ -468,8 +468,8 @@ export default function LeaguesManager({ initialLeagues, currentUserId, isAdmin 
                   </div>
                 </div>
                 {seasonForm.leagueId === league.id && league.seasons.length > 0 && (
-                  <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200/70 bg-white/80 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.2)]">
-                    <table className="min-w-full divide-y divide-slate-200/70 text-xs">
+                  <div className="mt-3 overflow-x-auto rounded-2xl border border-slate-200/70 bg-white/80 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.2)]">
+                    <table className="min-w-[520px] divide-y divide-slate-200/70 text-xs">
                       <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.2em] text-slate-500">
                         <tr>
                           <th className="px-3 py-3 text-left font-semibold text-slate-700">

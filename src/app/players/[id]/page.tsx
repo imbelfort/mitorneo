@@ -197,7 +197,7 @@ export default function PlayerProfilePage() {
   if (state === "loading") {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6 py-12">
-        <div className="rounded-3xl bg-white p-8 shadow-lg ring-1 ring-slate-200">
+        <div className="rounded-3xl bg-white p-6 sm:p-8 shadow-lg ring-1 ring-slate-200">
           <p className="text-lg font-semibold text-slate-900">Cargando jugador...</p>
         </div>
       </main>
@@ -207,7 +207,7 @@ export default function PlayerProfilePage() {
   if (state === "error" || !player) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6 py-12">
-        <div className="rounded-3xl bg-white p-8 shadow-lg ring-1 ring-slate-200">
+        <div className="rounded-3xl bg-white p-6 sm:p-8 shadow-lg ring-1 ring-slate-200">
           <p className="text-lg font-semibold text-slate-900">
             {error ?? "Jugador no encontrado"}
           </p>
@@ -247,7 +247,7 @@ export default function PlayerProfilePage() {
       <div className="player-profile-glow player-profile-glow--top pointer-events-none absolute left-1/2 top-0 h-72 w-72 -translate-x-1/2 rounded-full blur-[140px]" />
       <div className="player-profile-glow player-profile-glow--bottom pointer-events-none absolute bottom-0 right-0 h-80 w-80 rounded-full blur-[160px]" />
 
-      <div className="player-profile-shell w-full max-w-5xl rounded-[32px] border p-10 shadow-[0_30px_60px_-45px_rgba(15,23,42,0.5)] backdrop-blur">
+      <div className="player-profile-shell w-full max-w-5xl rounded-[32px] border p-6 sm:p-10 shadow-[0_30px_60px_-45px_rgba(15,23,42,0.5)] backdrop-blur">
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.45em] text-amber-600">

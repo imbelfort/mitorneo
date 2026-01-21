@@ -1657,9 +1657,9 @@ export default function TournamentsManager({
                   ? "No hay categorias para este deporte."
                   : "Selecciona un deporte para ver categorias."}
               </p>
-            ) : (
-              <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200/70 bg-white/80 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.2)]">
-                <table className="min-w-full divide-y divide-slate-200/70 text-sm">
+              ) : (
+                <div className="mt-3 overflow-x-auto rounded-2xl border border-slate-200/70 bg-white/80 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.2)]">
+                  <table className="min-w-[640px] divide-y divide-slate-200/70 text-sm">
                   <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.2em] text-slate-500">
                     <tr>
                       <th className="px-3 py-3 text-left font-semibold">Seleccion</th>
@@ -1722,9 +1722,9 @@ export default function TournamentsManager({
               <p className="mt-3 text-sm text-slate-500">
                 Selecciona categorias para asignar precios.
               </p>
-            ) : (
-              <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200/70 bg-white/80 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.2)]">
-                <table className="min-w-full divide-y divide-slate-200/70 text-sm">
+              ) : (
+                <div className="mt-3 overflow-x-auto rounded-2xl border border-slate-200/70 bg-white/80 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.2)]">
+                  <table className="min-w-[640px] divide-y divide-slate-200/70 text-sm">
                   <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.2em] text-slate-500">
                     <tr>
                       <th className="px-3 py-3 text-left font-semibold">Deporte</th>

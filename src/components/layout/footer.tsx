@@ -17,7 +17,7 @@ export default function Footer() {
                                 alt="MiTorneo"
                                 width={240}
                                 height={80}
-                                className="h-16 w-auto object-contain"
+                                className="h-12 w-auto object-contain sm:h-16"
                             />
                         </div>
                         <p className="text-sm leading-relaxed text-slate-500">

@@ -44,13 +44,13 @@ export default async function PlayersAdminPage() {
         </div>
       )}
       <div className="relative mx-auto w-full max-w-5xl">
-        <section className="admin-fade-up relative overflow-hidden rounded-[32px] bg-white/75 p-10 shadow-[0_35px_80px_-60px_rgba(15,23,42,0.5)] ring-1 ring-slate-200/70 backdrop-blur">
+        <section className="admin-fade-up relative overflow-hidden rounded-[32px] bg-white/75 p-6 sm:p-10 shadow-[0_35px_80px_-60px_rgba(15,23,42,0.5)] ring-1 ring-slate-200/70 backdrop-blur">
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-indigo-400/70 to-transparent" />
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-indigo-500/90">
             Panel de administraciA3n
           </p>
           <h1 className="mt-3 text-4xl font-bold leading-tight text-slate-900">
-            <span className="bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-600 bg-clip-text text-transparent">
+            <span className="admin-title bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-600 bg-clip-text text-transparent">
               Jugadores
             </span>
           </h1>

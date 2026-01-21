@@ -936,19 +936,20 @@ export default function TournamentScores({
                       General
                     </span>
                   </div>
-                  <table className="min-w-full divide-y divide-slate-200/70 text-sm">
-                    <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.2em] text-slate-500">
-                      <tr>
-                        <th className="px-2 py-2 text-left font-semibold">Pos</th>
-                        <th className="px-2 py-2 text-left font-semibold">Equipo</th>
-                        <th className="px-2 py-2 text-center font-semibold">Pts</th>
-                        <th className="px-2 py-2 text-center font-semibold">PJ</th>
-                        <th className="px-2 py-2 text-center font-semibold">PG</th>
-                        <th className="px-2 py-2 text-center font-semibold">PP</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 bg-white">
-                      {rows.map((entry, index) => {
+                  <div className="overflow-x-auto">
+                    <table className="min-w-[520px] divide-y divide-slate-200/70 text-sm">
+                      <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.2em] text-slate-500">
+                        <tr>
+                          <th className="px-2 py-2 text-left font-semibold">Pos</th>
+                          <th className="px-2 py-2 text-left font-semibold">Equipo</th>
+                          <th className="px-2 py-2 text-center font-semibold">Pts</th>
+                          <th className="px-2 py-2 text-center font-semibold">PJ</th>
+                          <th className="px-2 py-2 text-center font-semibold">PG</th>
+                          <th className="px-2 py-2 text-center font-semibold">PP</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 bg-white">
+                        {rows.map((entry, index) => {
                         const registration = registrationMap.get(entry.id);
                         return (
                           <tr key={`overall-${entry.id}`}>
@@ -970,9 +971,10 @@ export default function TournamentScores({
                             </td>
                           </tr>
                         );
-                      })}
-                    </tbody>
-                  </table>
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               );
             })}

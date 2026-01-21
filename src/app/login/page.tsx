@@ -41,7 +41,7 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <div className="flex min-h-screen items-center justify-center px-6 py-12">
-        <section className="w-full max-w-md rounded-3xl bg-white p-10 text-slate-900 shadow-2xl ring-1 ring-slate-200">
+        <section className="w-full max-w-md rounded-3xl bg-white p-6 sm:p-10 text-slate-900 shadow-2xl ring-1 ring-slate-200">
           <div className="mb-8 flex flex-col items-center gap-4 text-center">
             <Link href="/">
               <Image
@@ -49,7 +49,7 @@ export default function LoginPage() {
                   alt="MiTorneo"
                   width={220}
                   height={70}
-                  className="h-14 w-auto object-contain"
+                  className="h-10 w-auto object-contain sm:h-14"
                   priority
                 />
               </Link>

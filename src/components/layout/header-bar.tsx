@@ -36,7 +36,7 @@ export default function HeaderBar() {
               alt="Mi Torneo"
               width={180}
               height={54}
-              className="h-10 w-auto object-contain"
+              className="h-9 w-auto object-contain sm:h-10"
               priority
             />
           </Link>
@@ -109,7 +109,7 @@ export default function HeaderBar() {
               alt="Mi Torneo"
               width={200}
               height={60}
-              className="h-14 w-auto object-contain"
+              className="h-10 w-auto object-contain sm:h-14"
               priority
             />
           </Link>

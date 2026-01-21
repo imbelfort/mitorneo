@@ -21,7 +21,7 @@ export default function TermsOfService() {
                     Volver al inicio
                 </Link>
 
-                <div className="rounded-3xl bg-white p-8 shadow-sm ring-1 ring-slate-200 sm:p-12">
+                <div className="rounded-3xl bg-white p-6 sm:p-12 shadow-sm ring-1 ring-slate-200">
                     <div className="mb-10 flex items-center gap-4 border-b border-slate-100 pb-8">
                         <div className="rounded-xl bg-indigo-50 p-3 text-indigo-600">
                             <FileText className="h-8 w-8" />

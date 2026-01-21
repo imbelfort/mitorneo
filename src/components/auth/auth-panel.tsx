@@ -85,7 +85,7 @@ export default function AuthPanel() {
 
   if (user) {
     return (
-      <div className="admin-fade-up relative h-full overflow-hidden rounded-[28px] bg-white/80 p-8 shadow-[0_30px_70px_-55px_rgba(15,23,42,0.5)] ring-1 ring-slate-200/70 backdrop-blur">
+      <div className="admin-fade-up relative h-full overflow-hidden rounded-[28px] bg-white/80 p-6 sm:p-8 shadow-[0_30px_70px_-55px_rgba(15,23,42,0.5)] ring-1 ring-slate-200/70 backdrop-blur">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-indigo-400/70 to-transparent" />
         <span className="absolute right-6 top-4 text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-400">
           Sesion activa
@@ -105,7 +105,7 @@ export default function AuthPanel() {
   }
 
   return (
-    <div className="admin-fade-up relative h-full overflow-hidden rounded-[28px] bg-white/80 p-8 shadow-[0_30px_70px_-55px_rgba(15,23,42,0.5)] ring-1 ring-slate-200/70 backdrop-blur">
+    <div className="admin-fade-up relative h-full overflow-hidden rounded-[28px] bg-white/80 p-6 sm:p-8 shadow-[0_30px_70px_-55px_rgba(15,23,42,0.5)] ring-1 ring-slate-200/70 backdrop-blur">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-indigo-400/70 to-transparent" />
       <div className="flex items-center justify-between">
         <div>

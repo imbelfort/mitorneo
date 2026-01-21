@@ -697,9 +697,9 @@ export default function TournamentDraws({ tournamentId, tournamentName }: Props)
         <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
           No hay dias registrados para el torneo.
         </p>
-      ) : (
-        <div className="admin-fade-up overflow-hidden rounded-2xl border border-slate-200/70 bg-white/80 shadow-[0_14px_36px_-28px_rgba(15,23,42,0.25)]">
-          <table className="min-w-full divide-y divide-slate-200/70 text-sm">
+        ) : (
+          <div className="admin-fade-up overflow-x-auto rounded-2xl border border-slate-200/70 bg-white/80 shadow-[0_14px_36px_-28px_rgba(15,23,42,0.25)]">
+            <table className="min-w-[640px] divide-y divide-slate-200/70 text-sm">
             <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.2em] text-slate-500">
               <tr>
                 <th className="px-3 py-3 text-left font-semibold">Dia</th>
@@ -945,9 +945,9 @@ export default function TournamentDraws({ tournamentId, tournamentName }: Props)
         <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
           No hay categorias con inscritos.
         </p>
-      ) : (
-        <div className="admin-fade-up overflow-hidden rounded-2xl border border-slate-200/70 bg-white/80 shadow-[0_14px_36px_-28px_rgba(15,23,42,0.25)]">
-          <table className="min-w-full divide-y divide-slate-200/70 text-sm">
+        ) : (
+          <div className="admin-fade-up overflow-x-auto rounded-2xl border border-slate-200/70 bg-white/80 shadow-[0_14px_36px_-28px_rgba(15,23,42,0.25)]">
+            <table className="min-w-[640px] divide-y divide-slate-200/70 text-sm">
             <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.2em] text-slate-500">
               <tr>
                 <th className="px-3 py-3 text-left font-semibold">Categoria</th>

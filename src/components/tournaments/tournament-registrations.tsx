@@ -1359,20 +1359,21 @@ export default function TournamentRegistrations({
                     Sin inscripciones en esta categoria.
                   </p>
                 ) : (
-                  <table className="min-w-full divide-y divide-slate-200/70 text-sm">
-                    <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.2em] text-slate-500">
-                      <tr>
-                        <th className="px-3 py-3 text-left font-semibold">
-                          Jugador / Equipo
-                        </th>
-                        <th className="px-3 py-3 text-left font-semibold">Fecha</th>
-                        <th className="px-3 py-3 text-left font-semibold">
-                          Accion
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 bg-white">
-                      {categoryRegistrations.map((registration, index) => {
+                  <div className="overflow-x-auto">
+                    <table className="min-w-[520px] divide-y divide-slate-200/70 text-sm">
+                      <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.2em] text-slate-500">
+                        <tr>
+                          <th className="px-3 py-3 text-left font-semibold">
+                            Jugador / Equipo
+                          </th>
+                          <th className="px-3 py-3 text-left font-semibold">Fecha</th>
+                          <th className="px-3 py-3 text-left font-semibold">
+                            Accion
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 bg-white">
+                        {categoryRegistrations.map((registration, index) => {
                         const isDragTarget =
                           dragOverId === registration.id &&
                           draggingCategoryId === category.id;
@@ -1474,9 +1475,10 @@ export default function TournamentRegistrations({
                             </td>
                           </tr>
                         );
-                      })}
-                    </tbody>
-                  </table>
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
             ))}
@@ -1496,19 +1498,20 @@ export default function TournamentRegistrations({
                     {registrationGroups.extras.length === 1 ? "inscrito" : "inscritos"}
                   </span>
                 </div>
-                <table className="min-w-full divide-y divide-slate-200/70 text-sm">
-                  <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.2em] text-slate-500">
-                    <tr>
-                      <th className="px-3 py-3 text-left font-semibold">Categoria</th>
-                      <th className="px-3 py-3 text-left font-semibold">
-                        Jugador / Equipo
-                      </th>
-                      <th className="px-3 py-3 text-left font-semibold">Fecha</th>
-                      <th className="px-3 py-3 text-left font-semibold">Accion</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 bg-white">
-                    {registrationGroups.extras.map((registration, index) => (
+                <div className="overflow-x-auto">
+                  <table className="min-w-[640px] divide-y divide-slate-200/70 text-sm">
+                    <thead className="bg-slate-50/80 text-[11px] uppercase tracking-[0.2em] text-slate-500">
+                      <tr>
+                        <th className="px-3 py-3 text-left font-semibold">Categoria</th>
+                        <th className="px-3 py-3 text-left font-semibold">
+                          Jugador / Equipo
+                        </th>
+                        <th className="px-3 py-3 text-left font-semibold">Fecha</th>
+                        <th className="px-3 py-3 text-left font-semibold">Accion</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {registrationGroups.extras.map((registration, index) => (
                       <tr key={registration.id}>
                         <td className="px-3 py-2">
                           <div className="flex flex-col">
@@ -1580,9 +1583,10 @@ export default function TournamentRegistrations({
                           </button>
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>

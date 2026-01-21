@@ -102,7 +102,7 @@ export default async function AdminDashboard() {
                     {recentTournaments.length > 0 ? (
                         <div className="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 overflow-hidden">
                             <div className="overflow-x-auto">
-                                <table className="w-full text-left text-sm text-slate-600">
+                                <table className="min-w-[720px] text-left text-sm text-slate-600">
                                     <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                                         <tr>
                                             <th className="px-6 py-4 font-semibold">Nombre</th>
@@ -165,7 +165,7 @@ export default async function AdminDashboard() {
                             </div>
                         </div>
                     ) : (
-                        <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+                        <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-6 sm:p-8 text-center">
                             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
                                 <Trophy className="h-6 w-6" />
                             </div>
@@ -186,7 +186,7 @@ export default async function AdminDashboard() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
                     <Link href="/admin/tournaments" className="group">
-                        <div className="h-full rounded-2xl bg-white p-8 shadow-sm ring-1 ring-slate-200 transition-all hover:-translate-y-1 hover:shadow-lg hover:ring-indigo-500/30">
+                        <div className="h-full rounded-2xl bg-white p-6 sm:p-8 shadow-sm ring-1 ring-slate-200 transition-all hover:-translate-y-1 hover:shadow-lg hover:ring-indigo-500/30">
                             <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
                                 <Trophy className="h-7 w-7" />
                             </div>
@@ -201,7 +201,7 @@ export default async function AdminDashboard() {
                     </Link>
 
                     <Link href="/admin/leagues" className="group">
-                        <div className="h-full rounded-2xl bg-white p-8 shadow-sm ring-1 ring-slate-200 transition-all hover:-translate-y-1 hover:shadow-lg hover:ring-blue-500/30">
+                        <div className="h-full rounded-2xl bg-white p-6 sm:p-8 shadow-sm ring-1 ring-slate-200 transition-all hover:-translate-y-1 hover:shadow-lg hover:ring-blue-500/30">
                             <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-100 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
                                 <ShieldCheck className="h-7 w-7" />
                             </div>
@@ -216,7 +216,7 @@ export default async function AdminDashboard() {
                     </Link>
 
                     <Link href="/admin/players" className="group">
-                        <div className="h-full rounded-2xl bg-white p-8 shadow-sm ring-1 ring-slate-200 transition-all hover:-translate-y-1 hover:shadow-lg hover:ring-emerald-500/30">
+                        <div className="h-full rounded-2xl bg-white p-6 sm:p-8 shadow-sm ring-1 ring-slate-200 transition-all hover:-translate-y-1 hover:shadow-lg hover:ring-emerald-500/30">
                             <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
                                 <Users className="h-7 w-7" />
                             </div>
@@ -231,7 +231,7 @@ export default async function AdminDashboard() {
                     </Link>
 
                     <Link href="/admin/categories" className="group">
-                        <div className="h-full rounded-2xl bg-white p-8 shadow-sm ring-1 ring-slate-200 transition-all hover:-translate-y-1 hover:shadow-lg hover:ring-orange-500/30">
+                        <div className="h-full rounded-2xl bg-white p-6 sm:p-8 shadow-sm ring-1 ring-slate-200 transition-all hover:-translate-y-1 hover:shadow-lg hover:ring-orange-500/30">
                             <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-100 text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-colors">
                                 <Layers className="h-7 w-7" />
                             </div>
@@ -247,7 +247,7 @@ export default async function AdminDashboard() {
 
                     {session.user.role === "ADMIN" && (
                         <Link href="/admin/sports" className="group">
-                            <div className="h-full rounded-2xl bg-white p-8 shadow-sm ring-1 ring-slate-200 transition-all hover:-translate-y-1 hover:shadow-lg hover:ring-purple-500/30">
+                            <div className="h-full rounded-2xl bg-white p-6 sm:p-8 shadow-sm ring-1 ring-slate-200 transition-all hover:-translate-y-1 hover:shadow-lg hover:ring-purple-500/30">
                                 <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-purple-100 text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-colors">
                                     <Dumbbell className="h-7 w-7" />
                                 </div>
@@ -264,7 +264,7 @@ export default async function AdminDashboard() {
 
                     {session.user.role === "ADMIN" && (
                         <Link href="/admin/users" className="group">
-                            <div className="h-full rounded-2xl bg-white p-8 shadow-sm ring-1 ring-slate-200 transition-all hover:-translate-y-1 hover:shadow-lg hover:ring-slate-500/30">
+                            <div className="h-full rounded-2xl bg-white p-6 sm:p-8 shadow-sm ring-1 ring-slate-200 transition-all hover:-translate-y-1 hover:shadow-lg hover:ring-slate-500/30">
                                 <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 group-hover:bg-slate-900 group-hover:text-white transition-colors">
                                     <Users className="h-7 w-7" />
                                 </div>

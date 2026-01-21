@@ -70,7 +70,7 @@ export default function RegisterPage() {
 
     return (
         <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-white to-slate-100 px-6 py-10">
-            <div className="w-full max-w-lg rounded-3xl bg-white p-10 shadow-xl ring-1 ring-slate-200">
+            <div className="w-full max-w-lg rounded-3xl bg-white p-6 sm:p-10 shadow-xl ring-1 ring-slate-200">
                 <div className="mb-8 flex flex-col items-center gap-4 text-center">
                     <Link href="/">
                         <Image
@@ -78,7 +78,7 @@ export default function RegisterPage() {
                             alt="MiTorneo"
                             width={240}
                             height={80}
-                            className="h-16 w-auto object-contain"
+                            className="h-12 w-auto object-contain sm:h-16"
                             priority
                         />
                     </Link>

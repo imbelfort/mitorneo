@@ -132,7 +132,7 @@ export default async function Home() {
                 desc: "Acceso optimizado desde cualquier dispositivo."
               }
             ].map((feature, idx) => (
-              <div key={idx} className="group rounded-2xl p-8 bg-slate-50 border border-slate-100 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+              <div key={idx} className="group rounded-2xl p-6 sm:p-8 bg-slate-50 border border-slate-100 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
                 <div className="mb-6 h-14 w-14 rounded-2xl bg-indigo-50 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
                   {feature.icon}
                 </div>
@@ -197,7 +197,7 @@ export default async function Home() {
               { step: "02", title: "Inscribe jugadores", desc: "Habilita el registro o carga manual." },
               { step: "03", title: "Juega y publica", desc: "Genera cruces y actualiza resultados." }
             ].map((step, idx) => (
-              <div key={idx} className="relative p-8 bg-white rounded-2xl shadow-sm border border-slate-100">
+              <div key={idx} className="relative p-6 sm:p-8 bg-white rounded-2xl shadow-sm border border-slate-100">
                 <div className="text-6xl font-black text-slate-100 absolute top-4 right-4 select-none">
                   {step.step}
                 </div>
