@@ -25,14 +25,14 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function Home() {
-  const session = await getServerSession();
-
-  // Fetch the 3 most recent tournaments
-  const activeTournaments = await prisma.tournament.findMany({
-    take: 3,
-    orderBy: { startDate: "desc" },
-    include: { sport: true },
-  });
+  const [session, activeTournaments] = await Promise.all([
+    getServerSession(),
+    prisma.tournament.findMany({
+      take: 3,
+      orderBy: { startDate: "desc" },
+      include: { sport: true },
+    }),
+  ]);
 
   return (
     <main className="min-h-screen bg-slate-50" suppressHydrationWarning>
