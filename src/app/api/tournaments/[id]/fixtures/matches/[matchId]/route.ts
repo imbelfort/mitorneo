@@ -1,11 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { randomBytes } from "crypto";
 import { getServerSession } from "@/lib/auth";
+import { canManageTournament } from "@/lib/permissions";
 import { NextResponse } from "next/server";
 
 type GameInput = {
   a?: unknown;
   b?: unknown;
+  tiebreakA?: unknown;
+  tiebreakB?: unknown;
   durationMinutes?: unknown;
   duration?: unknown;
 };
@@ -182,10 +185,12 @@ const propagateWinnerToNextMatch = async (args: {
       teamAId: true,
       teamBId: true,
       createdAt: true,
+      isBronzeMatch: true,
     },
   });
-  if (playoffMatches.length === 0) return;
-  const { matchesByRound, orderMap } = buildPlayoffStructure(playoffMatches);
+  const mainMatches = playoffMatches.filter((entry) => !entry.isBronzeMatch);
+  if (mainMatches.length === 0) return;
+  const { matchesByRound, orderMap } = buildPlayoffStructure(mainMatches);
   const pos = orderMap.get(matchId);
   if (!pos) return;
   const nextRound = pos.round + 1;
@@ -316,7 +321,12 @@ export async function PATCH(
     return NextResponse.json({ error: "Torneo no encontrado" }, { status: 404 });
   }
 
-  if (session.user.role !== "ADMIN" && tournament.ownerId !== session.user.id) {
+  const canManage = await canManageTournament(
+    session.user,
+    tournamentId,
+    tournament.ownerId
+  );
+  if (!canManage) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
   if (tournament.status === "FINISHED") {
@@ -421,8 +431,13 @@ export async function PATCH(
     } else if (!Array.isArray(body.games)) {
       return NextResponse.json({ error: "Juegos invalidos" }, { status: 400 });
     } else {
-      const parsedGames: { a: number; b: number; durationMinutes?: number }[] =
-        [];
+      const parsedGames: {
+        a: number;
+        b: number;
+        tiebreakA?: number;
+        tiebreakB?: number;
+        durationMinutes?: number;
+      }[] = [];
       const games = body.games as GameInput[];
       if (games.length > 5) {
         return NextResponse.json(
@@ -434,13 +449,19 @@ export async function PATCH(
         if (!game || typeof game !== "object") continue;
         const aRaw = game.a;
         const bRaw = game.b;
+        const tiebreakARaw = game.tiebreakA;
+        const tiebreakBRaw = game.tiebreakB;
         const durationRaw =
           game.durationMinutes !== undefined ? game.durationMinutes : game.duration;
         const a = parseScore(aRaw);
         const b = parseScore(bRaw);
+        const tiebreakA = parseScore(tiebreakARaw);
+        const tiebreakB = parseScore(tiebreakBRaw);
         const duration = parseDuration(durationRaw);
         const aHas = hasValue(aRaw);
         const bHas = hasValue(bRaw);
+        const tiebreakAHas = hasValue(tiebreakARaw);
+        const tiebreakBHas = hasValue(tiebreakBRaw);
         const durationHas = hasValue(durationRaw);
         if (aHas && a === null) {
           return NextResponse.json(
@@ -454,23 +475,50 @@ export async function PATCH(
             { status: 400 }
           );
         }
+        if (tiebreakAHas && tiebreakA === null) {
+          return NextResponse.json(
+            { error: "Puntaje invalido en tie-break" },
+            { status: 400 }
+          );
+        }
+        if (tiebreakBHas && tiebreakB === null) {
+          return NextResponse.json(
+            { error: "Puntaje invalido en tie-break" },
+            { status: 400 }
+          );
+        }
         if (durationHas && duration === null) {
           return NextResponse.json(
             { error: "Duracion invalida en un set" },
             { status: 400 }
           );
         }
-        if (!aHas && !bHas && !durationHas) continue;
+        if (!aHas && !bHas && !tiebreakAHas && !tiebreakBHas && !durationHas) {
+          continue;
+        }
         if (a === null || b === null) {
           return NextResponse.json(
             { error: "Completa ambos puntajes por set" },
             { status: 400 }
           );
         }
-        const entry: { a: number; b: number; durationMinutes?: number } = {
-          a,
-          b,
-        };
+        if (tiebreakAHas !== tiebreakBHas) {
+          return NextResponse.json(
+            { error: "Completa ambos puntajes de tie-break" },
+            { status: 400 }
+          );
+        }
+        const entry: {
+          a: number;
+          b: number;
+          tiebreakA?: number;
+          tiebreakB?: number;
+          durationMinutes?: number;
+        } = { a, b };
+        if (tiebreakA !== null && tiebreakB !== null) {
+          entry.tiebreakA = tiebreakA;
+          entry.tiebreakB = tiebreakB;
+        }
         if (duration !== null) {
           entry.durationMinutes = duration;
         }
@@ -655,7 +703,12 @@ export async function DELETE(
     );
   }
 
-  if (session.user.role !== "ADMIN" && tournament.ownerId !== session.user.id) {
+  const canManage = await canManageTournament(
+    session.user,
+    tournamentId,
+    tournament.ownerId
+  );
+  if (!canManage) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
   if (tournament.status === "FINISHED") {

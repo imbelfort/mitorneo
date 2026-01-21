@@ -73,7 +73,7 @@ type Match = {
   courtNumber?: number | null;
   club?: Club | null;
   games?: unknown;
-  liveState?: { isLive?: boolean } | null;
+  liveState?: { isLive?: boolean; pointScore?: { A?: string | null; B?: string | null } } | null;
   winnerSide?: string | null;
   outcomeType?: string | null;
   outcomeSide?: string | null;
@@ -104,6 +104,7 @@ type TournamentPublicData = {
   endDate?: string | null;
   registrationDeadline?: string | null;
   rulesText?: string | null;
+  rankingEnabled?: boolean;
   playDays: string[];
   schedulePublished?: boolean;
   groupsPublished?: boolean;
@@ -215,17 +216,24 @@ const formatOrdinal = (value: number) => {
   return `${value}to`;
 };
 
-const formatMatchScore = (match: Match) => {
+const formatMatchScore = (match: Match, category?: Category | null) => {
   if (!Array.isArray(match.games)) return null;
   const parts: string[] = [];
   for (const entry of match.games) {
     if (!entry || typeof entry !== "object") continue;
     const a = (entry as { a?: unknown }).a;
     const b = (entry as { b?: unknown }).b;
+    const tiebreakA = (entry as { tiebreakA?: unknown }).tiebreakA;
+    const tiebreakB = (entry as { tiebreakB?: unknown }).tiebreakB;
     if (typeof a !== "number" || typeof b !== "number") continue;
-    parts.push(`${a}-${b}`);
+    const tiebreak =
+      typeof tiebreakA === "number" && typeof tiebreakB === "number"
+        ? `(${tiebreakA}-${tiebreakB})`
+        : "";
+    parts.push(`${a}-${b}${tiebreak}`);
   }
-  return parts.length ? parts.join(" | ") : null;
+  if (parts.length === 0) return null;
+  return parts.join(" | ");
 };
 
 const isMatchComplete = (match: Match) => {
@@ -399,6 +407,12 @@ export default function TournamentPublic({
     });
     return map;
   }, [tournament.categories]);
+
+  const getMatchCategory = (match: Match) =>
+    categoriesById.get(match.categoryId) ??
+    tournament.categories.find((entry) => entry.categoryId === match.categoryId)
+      ?.category ??
+    null;
 
   const categoryDrawTypeById = useMemo(() => {
     const map = new Map<string, string | null>();
@@ -662,7 +676,7 @@ export default function TournamentPublic({
         firstRoundMatches.length > 0 ? firstRoundMatches.length * 2 : undefined;
       const matchStatusByMatchId = new Map<string, string>();
       bracketMatches.forEach((match) => {
-        const score = formatMatchScore(match);
+        const score = formatMatchScore(match, getMatchCategory(match));
         if (score) {
           matchStatusByMatchId.set(match.id, score);
         }
@@ -711,7 +725,7 @@ export default function TournamentPublic({
   const resultMatches = useMemo(
     () =>
       matches.filter((match) => {
-        const score = formatMatchScore(match);
+        const score = formatMatchScore(match, getMatchCategory(match));
         return Boolean(
           score ||
             match.winnerSide ||
@@ -769,6 +783,7 @@ export default function TournamentPublic({
     if (tournament.league?.photoUrl) return tournament.league.photoUrl;
     return pickFallbackTournamentPhoto(tournament.id);
   }, [tournament.id, tournament.league?.photoUrl, tournament.photoUrl]);
+  const showLeagueInfo = Boolean(tournament.rankingEnabled && tournament.league);
 
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
@@ -798,32 +813,34 @@ export default function TournamentPublic({
                   "Informacion oficial del torneo y detalles para los jugadores."}
               </p>
             </div>
-            <div className="flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-xs text-slate-600">
-              <div className="h-16 w-24 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-2)]">
-                {tournament.league?.photoUrl ? (
-                  <img
-                    src={tournament.league.photoUrl}
-                    alt={tournament.league.name}
-                    className="h-full w-full object-contain p-1"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-[10px] text-slate-400">
-                    Sin foto
-                  </div>
-                )}
+            {showLeagueInfo && (
+              <div className="flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-xs text-slate-600">
+                <div className="h-16 w-24 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-2)]">
+                  {tournament.league?.photoUrl ? (
+                    <img
+                      src={tournament.league.photoUrl}
+                      alt={tournament.league.name}
+                      className="h-full w-full object-contain p-1"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-[10px] text-slate-400">
+                      Sin foto
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-900">
+                    {tournament.league?.name ?? "Sin liga"}
+                  </p>
+                  <p className="mt-1 text-slate-500">
+                    {tournament.sport?.name ?? "Sin deporte"}
+                  </p>
+                  <p className="mt-1 text-slate-500">
+                    Inicio: {formatDateShort(tournament.startDate)}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="font-semibold text-slate-900">
-                  {tournament.league?.name ?? "Sin liga"}
-                </p>
-                <p className="mt-1 text-slate-500">
-                  {tournament.sport?.name ?? "Sin deporte"}
-                </p>
-                <p className="mt-1 text-slate-500">
-                  Inicio: {formatDateShort(tournament.startDate)}
-                </p>
-              </div>
-            </div>
+            )}
           </div>
 
           {tournament.sponsors.length > 0 && (
@@ -1181,7 +1198,7 @@ export default function TournamentPublic({
                       {matches.map((match) => {
                         const category =
                           match.category ?? categoriesById.get(match.categoryId);
-                        const score = formatMatchScore(match);
+                        const score = formatMatchScore(match, getMatchCategory(match));
                         const isLive = Boolean(match.liveState?.isLive);
                         const drawType =
                           categoryDrawTypeById.get(match.categoryId) ?? null;
@@ -1497,7 +1514,7 @@ export default function TournamentPublic({
                 .map((match) => {
                 const category =
                   match.category ?? categoriesById.get(match.categoryId);
-                const score = formatMatchScore(match);
+                const score = formatMatchScore(match, getMatchCategory(match));
                 const scoreParts = score ? score.split(" | ") : [];
                 const activeSetIndex =
                   typeof match.liveState?.activeSet === "number"

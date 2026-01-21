@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "@/lib/auth";
+import { canManageLeague, canManageTournament } from "@/lib/permissions";
 import { NextResponse } from "next/server";
 
 type ClubInput = {
@@ -277,7 +278,12 @@ export async function PATCH(
     return NextResponse.json({ error: "Torneo no encontrado" }, { status: 404 });
   }
 
-  if (session.user.role !== "ADMIN" && tournament.ownerId !== session.user.id) {
+  const canManageTournamentAccess = await canManageTournament(
+    session.user,
+    tournamentId,
+    tournament.ownerId
+  );
+  if (!canManageTournamentAccess) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
   if (tournament.status === "FINISHED") {
@@ -467,7 +473,12 @@ export async function PATCH(
       return NextResponse.json({ error: "Liga no encontrada" }, { status: 404 });
     }
 
-    if (session.user.role !== "ADMIN" && league.ownerId !== session.user.id) {
+    const canManageLeagueAccess = await canManageLeague(
+      session.user,
+      league.id,
+      league.ownerId
+    );
+    if (!canManageLeagueAccess) {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }
 
@@ -575,7 +586,12 @@ export async function GET(
     return NextResponse.json({ error: "Torneo no encontrado" }, { status: 404 });
   }
 
-  if (session.user.role !== "ADMIN" && tournament.ownerId !== session.user.id) {
+  const canManageTournamentAccess = await canManageTournament(
+    session.user,
+    tournamentId,
+    tournament.ownerId
+  );
+  if (!canManageTournamentAccess) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
@@ -616,7 +632,12 @@ export async function DELETE(
     return NextResponse.json({ error: "Torneo no encontrado" }, { status: 404 });
   }
 
-  if (session.user.role !== "ADMIN" && tournament.ownerId !== session.user.id) {
+  const canManageTournamentAccess = await canManageTournament(
+    session.user,
+    tournamentId,
+    tournament.ownerId
+  );
+  if (!canManageTournamentAccess) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
   if (tournament.status === "FINISHED") {

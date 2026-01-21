@@ -137,7 +137,10 @@ export async function PATCH(
   }
 
   const normalizedSport = targetSport.name.toLowerCase().replace(/\s+/g, "");
-  const racquetball = normalizedSport === "racquetball" || normalizedSport === "raquetball";
+  const racquetball =
+    normalizedSport === "racquetball" ||
+    normalizedSport === "raquetball" ||
+    normalizedSport === "squash";
   const targetModality =
     data.modality !== undefined ? data.modality : category.modality;
   const targetGender = data.gender !== undefined ? data.gender : category.gender;

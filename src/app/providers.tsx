@@ -29,6 +29,7 @@ export const useAuth = () => {
 export default function Providers({ children, initialUser }: ProvidersProps) {
   const [user, setUser] = useState<AuthUser | null>(initialUser ?? null);
   const [loading, setLoading] = useState(false);
+  const idleTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -80,6 +81,51 @@ export default function Providers({ children, initialUser }: ProvidersProps) {
     });
     setUser(null);
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      if (idleTimeoutRef.current) {
+        clearTimeout(idleTimeoutRef.current);
+        idleTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    const IDLE_TIMEOUT_MS = 15 * 60 * 1000;
+
+    const resetIdleTimer = () => {
+      if (idleTimeoutRef.current) {
+        clearTimeout(idleTimeoutRef.current);
+      }
+      idleTimeoutRef.current = setTimeout(() => {
+        logout();
+      }, IDLE_TIMEOUT_MS);
+    };
+
+    const events: Array<keyof WindowEventMap> = [
+      "mousemove",
+      "mousedown",
+      "keydown",
+      "touchstart",
+      "scroll",
+      "focus",
+    ];
+
+    resetIdleTimer();
+    for (const event of events) {
+      window.addEventListener(event, resetIdleTimer, { passive: true });
+    }
+
+    return () => {
+      for (const event of events) {
+        window.removeEventListener(event, resetIdleTimer);
+      }
+      if (idleTimeoutRef.current) {
+        clearTimeout(idleTimeoutRef.current);
+        idleTimeoutRef.current = null;
+      }
+    };
+  }, [user, logout]);
 
   const value = useMemo(
     () => ({

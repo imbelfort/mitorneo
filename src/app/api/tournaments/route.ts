@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "@/lib/auth";
+import { canManageLeague } from "@/lib/permissions";
 import { NextResponse } from "next/server";
 
 type ClubInput = {
@@ -252,13 +253,43 @@ export async function GET() {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
+  const includePermissions =
+    session.user.role === "ADMIN"
+      ? {}
+      : {
+          permissions: {
+            where: { userId: session.user.id },
+            select: { userId: true },
+          },
+        };
+
   const tournaments = await prisma.tournament.findMany({
-    where: session.user.role === "ADMIN" ? undefined : { ownerId: session.user.id },
+    where:
+      session.user.role === "ADMIN"
+        ? undefined
+        : {
+            OR: [
+              { ownerId: session.user.id },
+              { permissions: { some: { userId: session.user.id } } },
+            ],
+          },
     orderBy: { createdAt: "desc" },
-    include: tournamentInclude,
+    include: {
+      ...tournamentInclude,
+      ...includePermissions,
+    },
   });
 
-  return NextResponse.json({ tournaments });
+  const formatted = tournaments.map((tournament) => ({
+    ...tournament,
+    canEdit:
+      session.user.role === "ADMIN" ||
+      tournament.ownerId === session.user.id ||
+      (Array.isArray((tournament as { permissions?: unknown[] }).permissions) &&
+        (tournament as { permissions?: unknown[] }).permissions!.length > 0),
+  }));
+
+  return NextResponse.json({ tournaments: formatted });
 }
 
 export async function POST(request: Request) {
@@ -450,7 +481,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Liga no encontrada" }, { status: 404 });
     }
 
-    if (session.user.role !== "ADMIN" && league.ownerId !== session.user.id) {
+    const canManage = await canManageLeague(session.user, league.id, league.ownerId);
+    if (!canManage) {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 });
     }
 

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "@/lib/auth";
+import { canManageTournament } from "@/lib/permissions";
 import { NextResponse } from "next/server";
 import { GET as getFixturePdf } from "./pdf/route";
 
@@ -84,7 +85,12 @@ export async function GET(
     return NextResponse.json({ error: "Torneo no encontrado" }, { status: 404 });
   }
 
-  if (session.user.role !== "ADMIN" && tournament.ownerId !== session.user.id) {
+  const canManage = await canManageTournament(
+    session.user,
+    tournamentId,
+    tournament.ownerId
+  );
+  if (!canManage) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 

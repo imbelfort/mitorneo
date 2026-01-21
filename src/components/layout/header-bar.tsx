@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, UserCircle2 } from "lucide-react";
 import ThemeToggle from "./theme-toggle";
 import { useAuth } from "@/app/providers";
 
@@ -49,6 +49,13 @@ export default function HeaderBar() {
                 <span className="hidden rounded-full bg-[var(--surface-2)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500 md:inline-flex">
                   {roleLabel}
                 </span>
+                <Link
+                  href="/profile"
+                  className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--foreground)] transition hover:bg-[var(--surface)]"
+                >
+                  <UserCircle2 className="h-4 w-4" />
+                  Mi perfil
+                </Link>
                 <button
                   type="button"
                   onClick={handleSignOut}
@@ -132,6 +139,14 @@ export default function HeaderBar() {
               <span className="hidden rounded-full bg-slate-100/80 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-600 md:inline-flex">
                 {roleLabel}
               </span>
+              <Link
+                href="/profile"
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-700 shadow-sm transition hover:bg-slate-50 sm:px-4"
+              >
+                <UserCircle2 className="h-4 w-4" />
+                <span className="hidden sm:inline">Mi perfil</span>
+                <span className="sm:hidden">Perfil</span>
+              </Link>
               <button
                 type="button"
                 onClick={handleSignOut}

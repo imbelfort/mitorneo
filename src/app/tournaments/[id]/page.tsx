@@ -182,6 +182,7 @@ export default async function TournamentPublicPage({
     endDate: toISOStringOrNull(tournament.endDate),
     registrationDeadline: toISOStringOrNull(tournament.registrationDeadline),
     rulesText: tournament.rulesText,
+    rankingEnabled: tournament.rankingEnabled,
     playDays: Array.isArray(tournament.playDays)
       ? tournament.playDays.filter((day): day is string => typeof day === "string")
       : [],

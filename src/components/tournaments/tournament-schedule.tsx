@@ -75,6 +75,8 @@ type ScoreSet = {
   a: string;
   b: string;
   duration: string;
+  tiebreakA: string;
+  tiebreakB: string;
 };
 
 type Match = {
@@ -89,7 +91,7 @@ type Match = {
   scheduledDate: string | null;
   startTime: string | null;
   games?: unknown;
-  liveState?: { isLive?: boolean } | null;
+  liveState?: { isLive?: boolean; pointScore?: { A?: string | null; B?: string | null } } | null;
   refereeToken?: string | null;
   teamAId?: string | null;
   teamBId?: string | null;
@@ -169,10 +171,29 @@ const formatOrdinal = (value: number) => {
   return `${value}to`;
 };
 
+const TENNIS_POINT_OPTIONS = ["0", "15", "30", "40", "Adv"];
+
+const normalizeTennisPoint = (value?: string | null) => {
+  if (!value) return "0";
+  const upper = value.toUpperCase();
+  if (upper === "AD" || upper === "ADV") return "Adv";
+  return value;
+};
+
 const isFrontonCategory = (category?: Category | null) =>
   (category?.sport?.name ?? "").toLowerCase().includes("fronton");
+const isTennisLikeSportName = (name?: string | null) => {
+  const value = (name ?? "").toLowerCase();
+  return value.includes("tenis") || value.includes("padel");
+};
 
-const emptyScoreSet = (): ScoreSet => ({ a: "", b: "", duration: "" });
+const emptyScoreSet = (): ScoreSet => ({
+  a: "",
+  b: "",
+  duration: "",
+  tiebreakA: "",
+  tiebreakB: "",
+});
 
 const parseScoreSets = (value: unknown) => {
   if (!Array.isArray(value)) return [] as ScoreSet[];
@@ -182,12 +203,16 @@ const parseScoreSets = (value: unknown) => {
     const aRaw = (entry as { a?: unknown }).a;
     const bRaw = (entry as { b?: unknown }).b;
     const durationRaw = (entry as { durationMinutes?: unknown }).durationMinutes;
+    const tieARaw = (entry as { tiebreakA?: unknown }).tiebreakA;
+    const tieBRaw = (entry as { tiebreakB?: unknown }).tiebreakB;
     const a = typeof aRaw === "number" ? String(aRaw) : "";
     const b = typeof bRaw === "number" ? String(bRaw) : "";
     const duration =
       typeof durationRaw === "number" ? String(durationRaw) : "";
-    if (!a && !b && !duration) continue;
-    sets.push({ a, b, duration });
+    const tiebreakA = typeof tieARaw === "number" ? String(tieARaw) : "";
+    const tiebreakB = typeof tieBRaw === "number" ? String(tieBRaw) : "";
+    if (!a && !b && !duration && !tiebreakA && !tiebreakB) continue;
+    sets.push({ a, b, duration, tiebreakA, tiebreakB });
   }
   return sets;
 };
@@ -236,15 +261,27 @@ const nextPowerOfTwo = (value: number) => {
 };
 
 const parseGames = (value: unknown) => {
-  if (!Array.isArray(value)) return [] as { a: number; b: number }[];
-  const games: { a: number; b: number }[] = [];
+  if (!Array.isArray(value)) return [] as { a: number; b: number; tiebreakA?: number; tiebreakB?: number }[];
+  const games: { a: number; b: number; tiebreakA?: number; tiebreakB?: number }[] = [];
   for (const entry of value) {
     if (!entry || typeof entry !== "object") continue;
     const a = (entry as { a?: unknown }).a;
     const b = (entry as { b?: unknown }).b;
+    const tiebreakA = (entry as { tiebreakA?: unknown }).tiebreakA;
+    const tiebreakB = (entry as { tiebreakB?: unknown }).tiebreakB;
     if (typeof a !== "number" || typeof b !== "number") continue;
     if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
-    games.push({ a, b });
+    const record: { a: number; b: number; tiebreakA?: number; tiebreakB?: number } = {
+      a,
+      b,
+    };
+    if (typeof tiebreakA === "number" && Number.isFinite(tiebreakA)) {
+      record.tiebreakA = tiebreakA;
+    }
+    if (typeof tiebreakB === "number" && Number.isFinite(tiebreakB)) {
+      record.tiebreakB = tiebreakB;
+    }
+    games.push(record);
   }
   return games;
 };
@@ -275,7 +312,10 @@ const computeMatchResult = (games: { a: number; b: number }[]) => {
   } as const;
 };
 
-const formatMatchScore = (match?: Match | null) => {
+const formatMatchScore = (
+  match?: Match | null,
+  options?: { isTennisLike?: boolean; pointScore?: { A?: string | null; B?: string | null } }
+) => {
   if (!match) return null;
   const outcomeType = match.outcomeType ?? "PLAYED";
   if (outcomeType !== "PLAYED") {
@@ -288,9 +328,18 @@ const formatMatchScore = (match?: Match | null) => {
   const games = parseGames(match.games);
   if (games.length === 0) return null;
   const result = computeMatchResult(games);
-  const gamesText = games.map((game) => `${game.a}-${game.b}`).join(", ");
+  const gamesText = games
+    .map((game) => {
+      const tiebreak =
+        typeof game.tiebreakA === "number" && typeof game.tiebreakB === "number"
+          ? `(${game.tiebreakA}-${game.tiebreakB})`
+          : "";
+      return `${game.a}-${game.b}${tiebreak}`;
+    })
+    .join(", ");
   if (!result) return gamesText;
-  return `${result.setsA}-${result.setsB} (${gamesText})`;
+  const base = `${result.setsA}-${result.setsB} (${gamesText})`;
+  return base;
 };
 
 const compareStandings = (
@@ -445,6 +494,8 @@ export default function TournamentSchedule({ tournamentId, tournamentName }: Pro
   const [message, setMessage] = useState<string | null>(null);
   const [scoreMatchId, setScoreMatchId] = useState<string | null>(null);
   const [scoreSets, setScoreSets] = useState<ScoreSet[]>([]);
+  const [scorePointA, setScorePointA] = useState("0");
+  const [scorePointB, setScorePointB] = useState("0");
   const [scoreWinner, setScoreWinner] = useState<"A" | "B" | null>(null);
   const [scoreOutcomeType, setScoreOutcomeType] = useState<OutcomeType>("PLAYED");
   const [scoreOutcomeSide, setScoreOutcomeSide] = useState<"A" | "B" | null>(
@@ -1022,6 +1073,10 @@ const renderTeamDisplay = (
     () => matches.find((match) => match.id === scoreMatchId) ?? null,
     [matches, scoreMatchId]
   );
+  const scoreCategory = scoreMatch
+    ? categoryMap.get(scoreMatch.categoryId)
+    : undefined;
+  const isScoreTennisLike = isTennisLikeSportName(scoreCategory?.sport?.name);
 
   const scoreTeamA = scoreMatch?.teamAId
     ? registrationMap.get(scoreMatch.teamAId)
@@ -1058,12 +1113,17 @@ const renderTeamDisplay = (
     setScoreOutcomeType(outcomeType);
     setScoreOutcomeSide(match.outcomeSide ?? null);
     setScoreWinner(match.winnerSide ?? inferredWinner);
+    const pointScore = match.liveState?.pointScore ?? {};
+    setScorePointA(normalizeTennisPoint(pointScore.A));
+    setScorePointB(normalizeTennisPoint(pointScore.B));
     setScoreError(null);
   };
 
   const closeScoreModal = () => {
     setScoreMatchId(null);
     setScoreSets([]);
+    setScorePointA("0");
+    setScorePointB("0");
     setScoreWinner(null);
     setScoreOutcomeType("PLAYED");
     setScoreOutcomeSide(null);
@@ -1098,12 +1158,20 @@ const renderTeamDisplay = (
     setScoreSaving(true);
     setScoreError(null);
 
-    const payload: { a: number; b: number; durationMinutes?: number }[] = [];
+    const payload: {
+      a: number;
+      b: number;
+      durationMinutes?: number;
+      tiebreakA?: number;
+      tiebreakB?: number;
+    }[] = [];
     for (let index = 0; index < scoreSets.length; index += 1) {
       const set = scoreSets[index];
       const aParsed = parseOptionalInt(set.a);
       const bParsed = parseOptionalInt(set.b);
       const durationParsed = parseOptionalInt(set.duration);
+      const tiebreakAParsed = parseOptionalInt(set.tiebreakA);
+      const tiebreakBParsed = parseOptionalInt(set.tiebreakB);
       if (!aParsed.valid || !bParsed.valid) {
         setScoreError(`Puntaje invalido en el set ${index + 1}`);
         setScoreSaving(false);
@@ -1114,22 +1182,46 @@ const renderTeamDisplay = (
         setScoreSaving(false);
         return;
       }
+      if (!tiebreakAParsed.valid || !tiebreakBParsed.valid) {
+        setScoreError(`Tiebreak invalido en el set ${index + 1}`);
+        setScoreSaving(false);
+        return;
+      }
       const hasAny =
         aParsed.value !== null ||
         bParsed.value !== null ||
-        durationParsed.value !== null;
+        durationParsed.value !== null ||
+        tiebreakAParsed.value !== null ||
+        tiebreakBParsed.value !== null;
       if (!hasAny) continue;
       if (aParsed.value === null || bParsed.value === null) {
         setScoreError(`Completa los puntos del set ${index + 1}`);
         setScoreSaving(false);
         return;
       }
-      const entry: { a: number; b: number; durationMinutes?: number } = {
+      if (
+        (tiebreakAParsed.value === null) !== (tiebreakBParsed.value === null)
+      ) {
+        setScoreError(`Completa el tiebreak del set ${index + 1}`);
+        setScoreSaving(false);
+        return;
+      }
+      const entry: {
+        a: number;
+        b: number;
+        durationMinutes?: number;
+        tiebreakA?: number;
+        tiebreakB?: number;
+      } = {
         a: aParsed.value,
         b: bParsed.value,
       };
       if (durationParsed.value !== null) {
         entry.durationMinutes = durationParsed.value;
+      }
+      if (tiebreakAParsed.value !== null && tiebreakBParsed.value !== null) {
+        entry.tiebreakA = tiebreakAParsed.value;
+        entry.tiebreakB = tiebreakBParsed.value;
       }
       payload.push(entry);
     }
@@ -1142,7 +1234,7 @@ const renderTeamDisplay = (
         : "B";
     const outcomeType = scoreOutcomeType ?? "PLAYED";
     const outcomeSide = outcomeType === "PLAYED" ? null : scoreOutcomeSide;
-    let winnerSide = scoreWinner ?? inferredWinner;
+    let winnerSide = inferredWinner;
     if (outcomeType !== "PLAYED") {
       if (!outcomeSide) {
         setScoreError("Selecciona el equipo afectado");
@@ -1150,12 +1242,6 @@ const renderTeamDisplay = (
         return;
       }
       winnerSide = outcomeSide === "A" ? "B" : "A";
-    }
-    const hasScores = payload.length > 0;
-    if (hasScores && !winnerSide) {
-      setScoreError("Selecciona el ganador del partido");
-      setScoreSaving(false);
-      return;
     }
 
     try {
@@ -1170,6 +1256,17 @@ const renderTeamDisplay = (
             winnerSide: winnerSide ?? null,
             outcomeType,
             outcomeSide,
+            ...(isScoreTennisLike
+              ? {
+                  liveState: {
+                    ...(scoreMatch.liveState ?? {}),
+                    pointScore: {
+                      A: scorePointA,
+                      B: scorePointB,
+                    },
+                  },
+                }
+              : {}),
           }),
         }
       );
@@ -1625,7 +1722,13 @@ const renderTeamDisplay = (
                             );
                         const hasScore =
                           Array.isArray(match.games) && match.games.length > 0;
-                        const scoreText = formatMatchScore(match);
+                        const isTennisLike = isTennisLikeSportName(
+                          category?.sport?.name
+                        );
+                        const scoreText = formatMatchScore(match, {
+                          isTennisLike,
+                          pointScore: match.liveState?.pointScore,
+                        });
                         return (
                           <tr key={match.id} className="bg-white">
                             <td className="px-3 py-2 text-slate-700">
@@ -1861,7 +1964,15 @@ const renderTeamDisplay = (
                                 match &&
                                 Array.isArray(match.games) &&
                                 match.games.length > 0;
-                              const scoreText = match ? formatMatchScore(match) : null;
+                              const isTennisLike = isTennisLikeSportName(
+                                category?.sport?.name
+                              );
+                              const scoreText = match
+                                ? formatMatchScore(match, {
+                                    isTennisLike,
+                                    pointScore: match.liveState?.pointScore,
+                                  })
+                                : null;
                               return (
                                 <tr
                                   key={slot.key}
@@ -2089,85 +2200,45 @@ const renderTeamDisplay = (
                         className="mt-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
                       >
                         <option value="">Selecciona equipo</option>
-                          <option value="A">
-                            {formatTeamName(scoreTeamA)}
-                          </option>
-                          <option value="B">
-                            {formatTeamName(scoreTeamB)}
-                          </option>
+                        <option value="A">{formatTeamName(scoreTeamA)}</option>
+                        <option value="B">{formatTeamName(scoreTeamB)}</option>
                       </select>
                     </div>
                   )}
                 </div>
-                {scoreOutcomeType !== "PLAYED" && (
-                  <p className="mt-2 text-xs text-slate-500">
-                    El ganador se asigna automaticamente al otro equipo.
-                  </p>
-                )}
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                      Sets ganados
-                    </p>
-                    <p className="text-sm font-semibold text-slate-900">
-                      {formatTeamName(scoreTeamA)}
-                      : {scoreSetWins.winsA} {" | "}
-                      {formatTeamName(scoreTeamB)}
-                      : {scoreSetWins.winsB}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setScoreWinner(null)}
-                    disabled={scoreOutcomeType !== "PLAYED"}
-                    className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-500 shadow-sm transition hover:bg-slate-100"
-                  >
-                    Quitar ganador
-                  </button>
-                </div>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-indigo-300">
-                    <input
-                      type="radio"
-                      name="winner"
-                      value="A"
-                      checked={scoreWinner === "A"}
-                      onChange={() => setScoreWinner("A")}
-                      disabled={scoreOutcomeType !== "PLAYED"}
-                      className="h-4 w-4"
-                    />
-                    Gana {formatTeamName(scoreTeamA)}
-                  </label>
-                  <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-indigo-300">
-                    <input
-                      type="radio"
-                      name="winner"
-                      value="B"
-                      checked={scoreWinner === "B"}
-                      onChange={() => setScoreWinner("B")}
-                      disabled={scoreOutcomeType !== "PLAYED"}
-                      className="h-4 w-4"
-                    />
-                    Gana {formatTeamName(scoreTeamB)}
-                  </label>
-                </div>
+                <p className="mt-2 text-xs text-slate-500">
+                  {scoreOutcomeType === "PLAYED"
+                    ? "El ganador se infiere por los sets."
+                    : "El ganador se asigna automaticamente al otro equipo."}
+                </p>
+                <p className="mt-1 text-xs font-semibold text-slate-700">
+                  Ganador:{" "}
+                  {scoreOutcomeType === "PLAYED"
+                    ? scoreSetWins.winsA === scoreSetWins.winsB
+                      ? "Sin definir"
+                      : scoreSetWins.winsA > scoreSetWins.winsB
+                      ? formatTeamName(scoreTeamA)
+                      : formatTeamName(scoreTeamB)
+                    : scoreOutcomeSide === "A"
+                    ? formatTeamName(scoreTeamB)
+                    : scoreOutcomeSide === "B"
+                    ? formatTeamName(scoreTeamA)
+                    : "Sin definir"}
+                </p>
               </div>
 
                 <div className="overflow-x-auto rounded-2xl border border-slate-200">
-                  <table className="min-w-[640px] divide-y divide-slate-200/70 text-xs">
+                  <table className="min-w-[560px] divide-y divide-slate-200/70 text-xs">
                   <thead className="bg-slate-50/80 text-[10px] uppercase tracking-[0.18em] text-slate-500">
                     <tr>
                       <th className="px-3 py-3 text-left font-semibold">
                         Set
                       </th>
                       <th className="px-3 py-3 text-left font-semibold">
-                        Puntos equipo 1
+                        Set equipo 1
                       </th>
                       <th className="px-3 py-3 text-left font-semibold">
-                        Puntos equipo 2
+                        Set equipo 2
                       </th>
                       <th className="px-3 py-3 text-left font-semibold">
                         Duracion (min)

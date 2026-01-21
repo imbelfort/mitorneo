@@ -64,29 +64,54 @@ export default function CategoriesManager({
   const isRacquetballName = (name: string | null | undefined) => {
     if (!name) return false;
     const normalized = name.toLowerCase().replace(/\s+/g, "");
-    return normalized === "racquetball" || normalized === "raquetball";
+    return (
+      normalized === "racquetball" ||
+      normalized === "raquetball" ||
+      normalized === "squash"
+    );
+  };
+
+  const isTennisLikeName = (name: string | null | undefined) => {
+    if (!name) return false;
+    const normalized = name.toLowerCase().replace(/\s+/g, "");
+    return normalized === "tenis" || normalized === "padel";
   };
 
   const isRacquetballSport = (sportId: string) =>
     isRacquetballName(sportNameById.get(sportId));
 
+  const isModalityGenderSport = (sportId: string) => {
+    const name = sportNameById.get(sportId);
+    return isRacquetballName(name) || isTennisLikeName(name);
+  };
+
   const resetForm = () => {
     const sportId = sports[0]?.id ?? "";
     const racquetball = isRacquetballSport(sportId);
+    const needsModality = isModalityGenderSport(sportId);
     setForm({
       sportId,
       name: "",
       abbreviation: "",
-      modality: racquetball ? "SINGLES" : "",
-      gender: racquetball ? "MALE" : "",
+      modality: racquetball ? "SINGLES" : needsModality ? "" : "",
+      gender: racquetball ? "MALE" : needsModality ? "" : "",
     });
   };
 
   const handleSportChange = (sportId: string) => {
     setForm((prev) => {
       const racquetball = isRacquetballSport(sportId);
-      if (!racquetball) {
+      const needsModality = isModalityGenderSport(sportId);
+      if (!needsModality) {
         return { ...prev, sportId, modality: "", gender: "" };
+      }
+      if (!racquetball) {
+        return {
+          ...prev,
+          sportId,
+          modality: prev.modality || "",
+          gender: prev.gender || "",
+        };
       }
       return {
         ...prev,
@@ -97,7 +122,7 @@ export default function CategoriesManager({
     });
   };
 
-  const isRacquetballSelected = isRacquetballSport(form.sportId);
+  const isModalityGenderSelected = isModalityGenderSport(form.sportId);
 
   const saveCategory = async () => {
     if (!form.sportId) {
@@ -161,13 +186,14 @@ export default function CategoriesManager({
     const racquetball = isRacquetballName(
       category.sport?.name ?? sportNameById.get(category.sportId)
     );
+    const needsModality = isModalityGenderSport(category.sportId);
     setEditingId(category.id);
     setForm({
       sportId: category.sportId,
       name: category.name,
       abbreviation: category.abbreviation,
-      modality: category.modality ?? (racquetball ? "SINGLES" : ""),
-      gender: category.gender ?? (racquetball ? "MALE" : ""),
+      modality: category.modality ?? (racquetball ? "SINGLES" : needsModality ? "" : ""),
+      gender: category.gender ?? (racquetball ? "MALE" : needsModality ? "" : ""),
     });
     setError(null);
     setMessage("Editando categoria");
@@ -198,14 +224,14 @@ export default function CategoriesManager({
   const modalityLabel = (value?: Category["modality"]) => {
     if (value === "SINGLES") return "Singles";
     if (value === "DOUBLES") return "Dobles";
-    return "—";
+    return "-";
   };
 
   const genderLabel = (value?: Category["gender"]) => {
     if (value === "MALE") return "Varones";
     if (value === "FEMALE") return "Mujeres";
     if (value === "MIXED") return "Mixto";
-    return "—";
+    return "-";
   };
 
   return (
@@ -258,7 +284,7 @@ export default function CategoriesManager({
                 placeholder="Ej. PRI"
               />
             </div>
-            {isRacquetballSelected && (
+            {isModalityGenderSelected && (
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">Modalidad</label>
                 <select
@@ -282,7 +308,7 @@ export default function CategoriesManager({
                 </select>
               </div>
             )}
-            {isRacquetballSelected && (
+            {isModalityGenderSelected && (
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700">Genero</label>
                 <select
@@ -319,7 +345,7 @@ export default function CategoriesManager({
                 !form.sportId ||
                 form.name.trim().length < 2 ||
                 form.abbreviation.trim().length < 1 ||
-                (isRacquetballSelected && (!form.modality || !form.gender))
+                (isModalityGenderSelected && (!form.modality || !form.gender))
               }
               className="inline-flex items-center justify-center rounded-full bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-[0_18px_40px_-22px_rgba(79,70,229,0.5)] transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-70"
             >

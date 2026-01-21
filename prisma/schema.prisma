@@ -26,6 +26,8 @@ model User {
   leagues       League[]     @relation("LeagueOwner")
   createdPlayers Player[]    @relation("PlayerCreator")
   createdCategories Category[] @relation("CategoryCreator")
+  leaguePermissions LeaguePermission[]
+  tournamentPermissions TournamentPermission[]
 }
 
 model Account {
@@ -191,6 +193,7 @@ model Tournament {
   groupQualifiers TournamentGroupQualifier[]
   scheduleDays    TournamentScheduleDay[]
   sponsors        TournamentSponsor[]
+  permissions     TournamentPermission[]
 }
 
 model GlobalSetting {
@@ -484,6 +487,7 @@ model League {
   rankings    PlayerRanking[]
 
   owner User? @relation("LeagueOwner", fields: [ownerId], references: [id])
+  permissions LeaguePermission[]
 }
 
 model Season {
@@ -499,4 +503,32 @@ model Season {
   rankings PlayerRanking[]
 
   @@unique([leagueId, name])
+}
+
+model LeaguePermission {
+  id        String   @id @default(cuid())
+  leagueId  String
+  userId    String
+  createdAt DateTime @default(now())
+
+  league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([leagueId, userId])
+  @@index([leagueId])
+  @@index([userId])
+}
+
+model TournamentPermission {
+  id           String   @id @default(cuid())
+  tournamentId String
+  userId       String
+  createdAt    DateTime @default(now())
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, userId])
+  @@index([tournamentId])
+  @@index([userId])
 }

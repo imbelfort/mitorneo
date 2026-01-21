@@ -1,17 +1,17 @@
-import { getServerSession } from "@/lib/auth";
-import Link from "next/link";
-import {
-  Trophy,
-  Users,
-  BarChart3,
-  Smartphone,
-  ArrowRight,
-  ShieldCheck,
-  Calendar
-} from "lucide-react";
 import HeroCarousel from "@/components/ui/hero-carousel";
-import Image from "next/image";
+import { getServerSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  ArrowRight,
+  BarChart3,
+  Calendar,
+  ShieldCheck,
+  Smartphone,
+  Trophy,
+  Users
+} from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
 
 const formatDate = (date: Date | null) => {
   if (!date) return "Fecha por definir";
@@ -49,7 +49,7 @@ export default async function Home() {
               </span>
             </h1>
             <p className="animate-fade-up mt-6 max-w-xl text-lg text-slate-200 delay-100">
-              Crea torneos de raquet y fronton en minutos, gestiona jugadores,
+              Crea torneos de raqueta en minutos, gestiona jugadores,
               fixtures y resultados desde cualquier lugar.
             </p>
 
@@ -156,7 +156,7 @@ export default async function Home() {
               </div>
               <h2 className="text-4xl font-bold text-white mb-6 leading-tight">
                 Pensado para <br />
-                <span className="text-indigo-400">Raquet y Fronton</span>
+                <span className="text-indigo-400">Raquet, Fronton, Padel, Tenis, Squash</span>
               </h2>
               <p className="text-slate-300 text-lg leading-relaxed mb-8">
                 MiTorneo esta disenado especificamente para respetar las reglas de juego, los formatos de competencia y las dinamicas unicas de los torneos de raquet y fronton. Olvidate de adaptar soluciones genericas.

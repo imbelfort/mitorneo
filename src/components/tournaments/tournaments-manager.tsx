@@ -77,6 +77,8 @@ type Tournament = {
   paymentRate: string;
   leagueId: string | null;
   league?: League | null;
+  ownerId?: string | null;
+  canEdit?: boolean;
   startDate: string | Date | null;
   endDate: string | Date | null;
   registrationDeadline: string | Date | null;
@@ -105,6 +107,7 @@ type Props = {
   categories: Category[];
   initialTournaments: Tournament[];
   isAdmin: boolean;
+  currentUserId: string;
 };
 
 const createEmptyClub = (): ClubForm => ({ name: "", address: "", courtsCount: "1" });
@@ -171,10 +174,20 @@ export default function TournamentsManager({
   categories,
   initialTournaments,
   isAdmin,
+  currentUserId,
 }: Props) {
   const searchParams = useSearchParams();
   const [tournaments, setTournaments] = useState<Tournament[]>(initialTournaments);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [activePermissionsTournamentId, setActivePermissionsTournamentId] =
+    useState<string | null>(null);
+  const [permissionEmail, setPermissionEmail] = useState("");
+  const [permissionUsers, setPermissionUsers] = useState<
+    { id: string; name: string | null; email: string }[]
+  >([]);
+  const [permissionLoading, setPermissionLoading] = useState(false);
+  const [permissionError, setPermissionError] = useState<string | null>(null);
+  const [permissionMessage, setPermissionMessage] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<
     1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
   >(1);
@@ -231,6 +244,13 @@ export default function TournamentsManager({
   const quillRef = useRef<any>(null);
   const lastRulesHtmlRef = useRef<string>("");
   const autoOpenedRef = useRef(false);
+
+  const canEditTournament = (tournament: Tournament) =>
+    tournament.canEdit !== undefined
+      ? tournament.canEdit
+      : isAdmin || tournament.ownerId === currentUserId;
+  const canManagePermissions = (tournament: Tournament) =>
+    isAdmin || tournament.ownerId === currentUserId;
 
   const handleSponsorUpload = async (index: number, file?: File | null) => {
     if (!file) return;
@@ -698,7 +718,14 @@ export default function TournamentsManager({
     setCategorySiblingPrices((prev) => ({ ...prev, [categoryId]: value }));
   };
 
-  const startEditing = (tournament: Tournament, nextStep?: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9) => {
+  const startEditing = (
+    tournament: Tournament,
+    nextStep?: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+  ) => {
+    if (!canEditTournament(tournament)) {
+      setError("No tienes permiso para editar este torneo");
+      return;
+    }
     const fallbackSportId =
       tournament.sportId ??
       tournament.categories[0]?.category?.sport?.id ??
@@ -771,6 +798,10 @@ export default function TournamentsManager({
   };
 
   const handleDelete = async (tournament: Tournament) => {
+    if (!canEditTournament(tournament)) {
+      setError("No tienes permiso para eliminar este torneo");
+      return;
+    }
     const confirmed = window.confirm(
       `Eliminar el torneo "${tournament.name}"? Esta accion no se puede deshacer.`
     );
@@ -798,6 +829,82 @@ export default function TournamentsManager({
     }
     await refreshTournaments();
     setMessage("Torneo eliminado");
+  };
+
+  const fetchPermissions = async (tournamentId: string) => {
+    setPermissionLoading(true);
+    setPermissionError(null);
+    setPermissionMessage(null);
+    const res = await fetch(`/api/tournaments/${tournamentId}/permissions`, {
+      credentials: "include",
+    });
+    const data = await res.json().catch(() => ({}));
+    setPermissionLoading(false);
+    if (!res.ok) {
+      setPermissionError(data?.error ?? "No se pudieron cargar los permisos");
+      setPermissionUsers([]);
+      return;
+    }
+    setPermissionUsers(Array.isArray(data.permissions) ? data.permissions : []);
+  };
+
+  const openPermissions = async (tournamentId: string) => {
+    setActivePermissionsTournamentId(tournamentId);
+    setPermissionEmail("");
+    await fetchPermissions(tournamentId);
+  };
+
+  const closePermissions = () => {
+    setActivePermissionsTournamentId(null);
+    setPermissionEmail("");
+    setPermissionUsers([]);
+    setPermissionError(null);
+    setPermissionMessage(null);
+  };
+
+  const handleGrantPermission = async (tournamentId: string) => {
+    if (!permissionEmail.trim()) {
+      setPermissionError("Ingresa el correo del usuario");
+      return;
+    }
+    setPermissionLoading(true);
+    setPermissionError(null);
+    setPermissionMessage(null);
+    const res = await fetch(`/api/tournaments/${tournamentId}/permissions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ email: permissionEmail.trim() }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setPermissionLoading(false);
+    if (!res.ok) {
+      setPermissionError(data?.error ?? "No se pudo agregar el permiso");
+      return;
+    }
+    setPermissionEmail("");
+    setPermissionMessage("Permiso agregado");
+    await fetchPermissions(tournamentId);
+  };
+
+  const handleRevokePermission = async (tournamentId: string, userId: string) => {
+    setPermissionLoading(true);
+    setPermissionError(null);
+    setPermissionMessage(null);
+    const res = await fetch(`/api/tournaments/${tournamentId}/permissions`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ userId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setPermissionLoading(false);
+    if (!res.ok) {
+      setPermissionError(data?.error ?? "No se pudo quitar el permiso");
+      return;
+    }
+    setPermissionMessage("Permiso removido");
+    await fetchPermissions(tournamentId);
   };
 
   const saveTournament = async () => {
@@ -1939,6 +2046,7 @@ export default function TournamentsManager({
                     <button
                       type="button"
                       onClick={() => startEditing(tournament)}
+                      disabled={!canEditTournament(tournament)}
                       className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-white"
                     >
                       Editar
@@ -1946,10 +2054,24 @@ export default function TournamentsManager({
                     <button
                       type="button"
                       onClick={() => handleDelete(tournament)}
+                      disabled={!canEditTournament(tournament)}
                       className="rounded-full border border-red-200 bg-red-50/60 px-3 py-1.5 text-xs font-semibold text-red-600 shadow-sm transition hover:bg-red-50"
                     >
                       Eliminar
                     </button>
+                    {canManagePermissions(tournament) && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          activePermissionsTournamentId === tournament.id
+                            ? closePermissions()
+                            : openPermissions(tournament.id)
+                        }
+                        className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-white"
+                      >
+                        Permisos
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -1961,7 +2083,87 @@ export default function TournamentsManager({
                       ? "Torneo pagado"
                       : "Finalizado"}
                   </span>
+                  {!canEditTournament(tournament) && (
+                    <span className="text-[11px] font-semibold text-slate-400">
+                      Solo lectura
+                    </span>
+                  )}
                 </div>
+                {activePermissionsTournamentId === tournament.id &&
+                  canManagePermissions(tournament) && (
+                    <div className="mt-4 rounded-2xl border border-slate-200/70 bg-white/90 p-4 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.2)]">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                          Permisos de edicion
+                        </p>
+                        <button
+                          type="button"
+                          onClick={closePermissions}
+                          className="rounded-full border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-600"
+                        >
+                          Cerrar
+                        </button>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <input
+                          value={permissionEmail}
+                          onChange={(e) => setPermissionEmail(e.target.value)}
+                          type="email"
+                          placeholder="correo@ejemplo.com"
+                          className="w-full flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleGrantPermission(tournament.id)}
+                          disabled={permissionLoading}
+                          className="rounded-full bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-70"
+                        >
+                          Agregar
+                        </button>
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        {permissionUsers.length === 0 ? (
+                          <p className="text-xs text-slate-500">
+                            Aun no hay usuarios con permiso.
+                          </p>
+                        ) : (
+                          permissionUsers.map((user) => (
+                            <div
+                              key={user.id}
+                              className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200/70 bg-white/80 px-3 py-2"
+                            >
+                              <div>
+                                <p className="text-sm font-semibold text-slate-800">
+                                  {user.name ?? "Sin nombre"}
+                                </p>
+                                <p className="text-xs text-slate-500">{user.email}</p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleRevokePermission(tournament.id, user.id)
+                                }
+                                disabled={permissionLoading}
+                                className="rounded-full border border-red-200 bg-red-50/60 px-3 py-1 text-[11px] font-semibold text-red-600 shadow-sm transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-70"
+                              >
+                                Quitar
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      {permissionError && (
+                        <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                          {permissionError}
+                        </p>
+                      )}
+                      {permissionMessage && (
+                        <p className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+                          {permissionMessage}
+                        </p>
+                      )}
+                    </div>
+                  )}
               </div>
             ))}
           </div>

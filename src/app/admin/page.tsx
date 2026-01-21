@@ -20,14 +20,30 @@ export default async function AdminDashboard() {
 
     // Fetch some quick stats
     const tournamentsCount = await prisma.tournament.count({
-        where: session.user.role === "ADMIN" ? {} : { ownerId: session.user.id }
+        where:
+            session.user.role === "ADMIN"
+                ? {}
+                : {
+                    OR: [
+                        { ownerId: session.user.id },
+                        { permissions: { some: { userId: session.user.id } } }
+                    ]
+                }
     });
 
     const playersCount = await prisma.player.count();
     const leaguesCount = await prisma.league.count();
 
     const recentTournaments = await prisma.tournament.findMany({
-        where: session.user.role === "ADMIN" ? {} : { ownerId: session.user.id },
+        where:
+            session.user.role === "ADMIN"
+                ? {}
+                : {
+                    OR: [
+                        { ownerId: session.user.id },
+                        { permissions: { some: { userId: session.user.id } } }
+                    ]
+                },
         orderBy: { createdAt: "desc" },
         take: 5,
         include: {

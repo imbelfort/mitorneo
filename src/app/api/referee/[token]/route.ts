@@ -1,7 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
-type GameInput = { a?: unknown; b?: unknown };
+type GameInput = {
+  a?: unknown;
+  b?: unknown;
+  tiebreakA?: unknown;
+  tiebreakB?: unknown;
+};
 
 const parseGames = (value: unknown) => {
   if (!Array.isArray(value)) return [] as { a: number; b: number }[];
@@ -15,6 +20,25 @@ const parseGames = (value: unknown) => {
     games.push({ a, b });
   }
   return games;
+};
+
+const parseScore = (value: unknown) => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number") {
+    return Number.isInteger(value) && value >= 0 ? value : null;
+  }
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (!/^\d+$/.test(trimmed)) return null;
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+};
+
+const hasValue = (value: unknown) => {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  return true;
 };
 
 const computeMatchWinner = (games: { a: number; b: number }[]) => {
@@ -94,10 +118,12 @@ const propagateWinnerToNextMatch = async (args: {
       teamAId: true,
       teamBId: true,
       createdAt: true,
+      isBronzeMatch: true,
     },
   });
-  if (playoffMatches.length === 0) return;
-  const { matchesByRound, orderMap } = buildPlayoffStructure(playoffMatches);
+  const mainMatches = playoffMatches.filter((entry) => !entry.isBronzeMatch);
+  if (mainMatches.length === 0) return;
+  const { matchesByRound, orderMap } = buildPlayoffStructure(mainMatches);
   const pos = orderMap.get(matchId);
   if (!pos) return;
   const nextRound = pos.round + 1;
@@ -323,7 +349,12 @@ export async function PATCH(
     } else if (!Array.isArray(body.games)) {
       return NextResponse.json({ error: "Juegos invalidos" }, { status: 400 });
     } else {
-      const parsedGames: { a: number; b: number }[] = [];
+      const parsedGames: {
+        a: number;
+        b: number;
+        tiebreakA?: number;
+        tiebreakB?: number;
+      }[] = [];
       const games = body.games as GameInput[];
       if (games.length > 7) {
         return NextResponse.json(
@@ -333,21 +364,66 @@ export async function PATCH(
       }
       for (const game of games) {
         if (!game || typeof game !== "object") continue;
-        const a = (game as { a?: unknown }).a;
-        const b = (game as { b?: unknown }).b;
-        if (typeof a !== "number" || typeof b !== "number") {
+        const aRaw = game.a;
+        const bRaw = game.b;
+        const tiebreakARaw = game.tiebreakA;
+        const tiebreakBRaw = game.tiebreakB;
+        const a = parseScore(aRaw);
+        const b = parseScore(bRaw);
+        const tiebreakA = parseScore(tiebreakARaw);
+        const tiebreakB = parseScore(tiebreakBRaw);
+        const aHas = hasValue(aRaw);
+        const bHas = hasValue(bRaw);
+        const tiebreakAHas = hasValue(tiebreakARaw);
+        const tiebreakBHas = hasValue(tiebreakBRaw);
+        if (aHas && a === null) {
           return NextResponse.json(
             { error: "Puntaje invalido en un set" },
             { status: 400 }
           );
         }
-        if (!Number.isFinite(a) || !Number.isFinite(b) || a < 0 || b < 0) {
+        if (bHas && b === null) {
           return NextResponse.json(
             { error: "Puntaje invalido en un set" },
             { status: 400 }
           );
         }
-        parsedGames.push({ a, b });
+        if (tiebreakAHas && tiebreakA === null) {
+          return NextResponse.json(
+            { error: "Puntaje invalido en tie-break" },
+            { status: 400 }
+          );
+        }
+        if (tiebreakBHas && tiebreakB === null) {
+          return NextResponse.json(
+            { error: "Puntaje invalido en tie-break" },
+            { status: 400 }
+          );
+        }
+        if (!aHas && !bHas && !tiebreakAHas && !tiebreakBHas) continue;
+        if (a === null || b === null) {
+          return NextResponse.json(
+            { error: "Completa ambos puntajes por set" },
+            { status: 400 }
+          );
+        }
+        if (tiebreakAHas !== tiebreakBHas) {
+          return NextResponse.json(
+            { error: "Completa ambos puntajes de tie-break" },
+            { status: 400 }
+          );
+        }
+        const entry: {
+          a: number;
+          b: number;
+          tiebreakA?: number;
+          tiebreakB?: number;
+        } = { a, b };
+        if (tiebreakA !== null && tiebreakB !== null) {
+          entry.tiebreakA = tiebreakA;
+          entry.tiebreakB = tiebreakB;
+        }
+        parsedGames.push(entry);
       }
       data.games = parsedGames;
     }

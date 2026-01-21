@@ -149,15 +149,27 @@ const normalizeTiebreakerOrder = (value?: string[]) => {
 };
 
 const parseGames = (value: unknown) => {
-  if (!Array.isArray(value)) return [] as { a: number; b: number }[];
-  const games: { a: number; b: number }[] = [];
+  if (!Array.isArray(value)) return [] as { a: number; b: number; tiebreakA?: number; tiebreakB?: number }[];
+  const games: { a: number; b: number; tiebreakA?: number; tiebreakB?: number }[] = [];
   for (const entry of value) {
     if (!entry || typeof entry !== "object") continue;
     const a = (entry as { a?: unknown }).a;
     const b = (entry as { b?: unknown }).b;
+    const tiebreakA = (entry as { tiebreakA?: unknown }).tiebreakA;
+    const tiebreakB = (entry as { tiebreakB?: unknown }).tiebreakB;
     if (typeof a !== "number" || typeof b !== "number") continue;
     if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
-    games.push({ a, b });
+    const record: { a: number; b: number; tiebreakA?: number; tiebreakB?: number } = {
+      a,
+      b,
+    };
+    if (typeof tiebreakA === "number" && Number.isFinite(tiebreakA)) {
+      record.tiebreakA = tiebreakA;
+    }
+    if (typeof tiebreakB === "number" && Number.isFinite(tiebreakB)) {
+      record.tiebreakB = tiebreakB;
+    }
+    games.push(record);
   }
   return games;
 };

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "@/lib/auth";
+import { canManageTournament } from "@/lib/permissions";
 import { NextResponse } from "next/server";
 
 const parsePriceValue = (value: unknown) => {
@@ -176,7 +177,12 @@ export async function PATCH(
     return NextResponse.json({ error: "Torneo no encontrado" }, { status: 404 });
   }
 
-  if (session.user.role !== "ADMIN" && tournament.ownerId !== session.user.id) {
+  const canManage = await canManageTournament(
+    session.user,
+    tournamentId,
+    tournament.ownerId
+  );
+  if (!canManage) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
   if (tournament.status === "ACTIVE" || tournament.status === "FINISHED") {
@@ -459,7 +465,12 @@ export async function DELETE(
     return NextResponse.json({ error: "Torneo no encontrado" }, { status: 404 });
   }
 
-  if (session.user.role !== "ADMIN" && tournament.ownerId !== session.user.id) {
+  const canManage = await canManageTournament(
+    session.user,
+    tournamentId,
+    tournament.ownerId
+  );
+  if (!canManage) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
   if (tournament.status === "ACTIVE" || tournament.status === "FINISHED") {

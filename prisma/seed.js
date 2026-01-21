@@ -28,7 +28,10 @@ async function main() {
 
   const sports = [
     { name: "Racquetball" },
+    { name: "Squash" },
     { name: "Fronton" },
+    { name: "Padel" },
+    { name: "Tenis" },
   ];
 
   for (const sport of sports) {

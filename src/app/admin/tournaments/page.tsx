@@ -19,12 +19,6 @@ export default async function TournamentsAdminPage() {
     redirect("/");
   }
 
-  const leagues = await prisma.league.findMany({
-    where: session.user.role === "ADMIN" ? undefined : { ownerId: session.user.id },
-    orderBy: { name: "asc" },
-    select: { id: true, name: true },
-  });
-
   const sports = await prisma.sport.findMany({
     orderBy: { name: "asc" },
     select: { id: true, name: true },
@@ -35,8 +29,26 @@ export default async function TournamentsAdminPage() {
     include: { sport: { select: { id: true, name: true } } },
   });
 
+  const includePermissions =
+    session.user.role === "ADMIN"
+      ? {}
+      : {
+          permissions: {
+            where: { userId: session.user.id },
+            select: { userId: true },
+          },
+        };
+
   const tournaments = await prisma.tournament.findMany({
-    where: session.user.role === "ADMIN" ? undefined : { ownerId: session.user.id },
+    where:
+      session.user.role === "ADMIN"
+        ? undefined
+        : {
+            OR: [
+              { ownerId: session.user.id },
+              { permissions: { some: { userId: session.user.id } } },
+            ],
+          },
     orderBy: { createdAt: "desc" },
     include: {
       league: { select: { id: true, name: true } },
@@ -54,7 +66,30 @@ export default async function TournamentsAdminPage() {
           },
         },
       },
+      ...includePermissions,
     },
+  });
+
+  const leagueIds =
+    session.user.role === "ADMIN"
+      ? []
+      : tournaments
+          .map((tournament) => tournament.leagueId)
+          .filter((id): id is string => typeof id === "string");
+  const leagueWhere =
+    session.user.role === "ADMIN"
+      ? undefined
+      : {
+          OR: [
+            { ownerId: session.user.id },
+            { permissions: { some: { userId: session.user.id } } },
+            ...(leagueIds.length ? [{ id: { in: leagueIds } }] : []),
+          ],
+        };
+  const leagues = await prisma.league.findMany({
+    where: leagueWhere,
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
   });
 
   const serializedTournaments = tournaments.map((tournament) => ({
@@ -68,6 +103,12 @@ export default async function TournamentsAdminPage() {
     paymentRate: tournament.paymentRate.toString(),
     leagueId: tournament.leagueId,
     league: tournament.league,
+    ownerId: tournament.ownerId,
+    canEdit:
+      session.user.role === "ADMIN" ||
+      tournament.ownerId === session.user.id ||
+      (Array.isArray((tournament as { permissions?: unknown[] }).permissions) &&
+        (tournament as { permissions?: unknown[] }).permissions!.length > 0),
     startDate: toISOStringOrNull(tournament.startDate),
     endDate: toISOStringOrNull(tournament.endDate),
     registrationDeadline: toISOStringOrNull(tournament.registrationDeadline),
@@ -142,6 +183,7 @@ export default async function TournamentsAdminPage() {
               categories={categories}
               initialTournaments={serializedTournaments}
               isAdmin={session.user.role === "ADMIN"}
+              currentUserId={session.user.id}
             />
           </div>
         </section>

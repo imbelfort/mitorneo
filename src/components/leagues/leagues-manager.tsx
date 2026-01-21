@@ -16,6 +16,7 @@ type League = {
   description: string | null;
   photoUrl?: string | null;
   ownerId?: string | null;
+  canEdit?: boolean;
   seasons: Season[];
 };
 
@@ -38,6 +39,16 @@ export default function LeaguesManager({ initialLeagues, currentUserId, isAdmin 
   const [error, setError] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [activePermissionsLeagueId, setActivePermissionsLeagueId] = useState<
+    string | null
+  >(null);
+  const [permissionEmail, setPermissionEmail] = useState("");
+  const [permissionUsers, setPermissionUsers] = useState<
+    { id: string; name: string | null; email: string }[]
+  >([]);
+  const [permissionLoading, setPermissionLoading] = useState(false);
+  const [permissionError, setPermissionError] = useState<string | null>(null);
+  const [permissionMessage, setPermissionMessage] = useState<string | null>(null);
   const [leagueForm, setLeagueForm] = useState({
     name: "",
     description: "",
@@ -50,7 +61,9 @@ export default function LeaguesManager({ initialLeagues, currentUserId, isAdmin 
     endDate: "",
   });
   const canManageLeague = (league: League) =>
-    isAdmin || (league.ownerId && league.ownerId === currentUserId);
+    league.canEdit ?? (isAdmin || league.ownerId === currentUserId);
+  const canManagePermissions = (league: League) =>
+    isAdmin || league.ownerId === currentUserId;
 
   const refreshLeagues = async () => {
     const res = await fetch("/api/leagues", { cache: "no-store" });
@@ -180,6 +193,82 @@ export default function LeaguesManager({ initialLeagues, currentUserId, isAdmin 
       cancelEditing();
     }
     setMessage("Liga eliminada");
+  };
+
+  const fetchPermissions = async (leagueId: string) => {
+    setPermissionLoading(true);
+    setPermissionError(null);
+    setPermissionMessage(null);
+    const res = await fetch(`/api/leagues/${leagueId}/permissions`, {
+      credentials: "include",
+    });
+    const data = await res.json().catch(() => ({}));
+    setPermissionLoading(false);
+    if (!res.ok) {
+      setPermissionError(data?.error ?? "No se pudieron cargar los permisos");
+      setPermissionUsers([]);
+      return;
+    }
+    setPermissionUsers(Array.isArray(data.permissions) ? data.permissions : []);
+  };
+
+  const openPermissions = async (leagueId: string) => {
+    setActivePermissionsLeagueId(leagueId);
+    setPermissionEmail("");
+    await fetchPermissions(leagueId);
+  };
+
+  const closePermissions = () => {
+    setActivePermissionsLeagueId(null);
+    setPermissionEmail("");
+    setPermissionUsers([]);
+    setPermissionError(null);
+    setPermissionMessage(null);
+  };
+
+  const handleGrantPermission = async (leagueId: string) => {
+    if (!permissionEmail.trim()) {
+      setPermissionError("Ingresa el correo del usuario");
+      return;
+    }
+    setPermissionLoading(true);
+    setPermissionError(null);
+    setPermissionMessage(null);
+    const res = await fetch(`/api/leagues/${leagueId}/permissions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ email: permissionEmail.trim() }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setPermissionLoading(false);
+    if (!res.ok) {
+      setPermissionError(data?.error ?? "No se pudo agregar el permiso");
+      return;
+    }
+    setPermissionEmail("");
+    setPermissionMessage("Permiso agregado");
+    await fetchPermissions(leagueId);
+  };
+
+  const handleRevokePermission = async (leagueId: string, userId: string) => {
+    setPermissionLoading(true);
+    setPermissionError(null);
+    setPermissionMessage(null);
+    const res = await fetch(`/api/leagues/${leagueId}/permissions`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ userId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setPermissionLoading(false);
+    if (!res.ok) {
+      setPermissionError(data?.error ?? "No se pudo quitar el permiso");
+      return;
+    }
+    setPermissionMessage("Permiso removido");
+    await fetchPermissions(leagueId);
   };
 
   const handleCreateSeason = async () => {
@@ -459,6 +548,19 @@ export default function LeaguesManager({ initialLeagues, currentUserId, isAdmin 
                         >
                           Eliminar
                         </button>
+                        {canManagePermissions(league) && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              activePermissionsLeagueId === league.id
+                                ? closePermissions()
+                                : openPermissions(league.id)
+                            }
+                            className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-white"
+                          >
+                            Permisos
+                          </button>
+                        )}
                       </div>
                     ) : (
                       <span className="text-[11px] font-semibold text-slate-400">
@@ -497,6 +599,78 @@ export default function LeaguesManager({ initialLeagues, currentUserId, isAdmin 
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                )}
+                {activePermissionsLeagueId === league.id && canManagePermissions(league) && (
+                  <div className="mt-4 rounded-2xl border border-slate-200/70 bg-white/90 p-4 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.2)]">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                        Permisos de edicion
+                      </p>
+                      <button
+                        type="button"
+                        onClick={closePermissions}
+                        className="rounded-full border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-600"
+                      >
+                        Cerrar
+                      </button>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <input
+                        value={permissionEmail}
+                        onChange={(e) => setPermissionEmail(e.target.value)}
+                        type="email"
+                        placeholder="correo@ejemplo.com"
+                        className="w-full flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleGrantPermission(league.id)}
+                        disabled={permissionLoading}
+                        className="rounded-full bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-70"
+                      >
+                        Agregar
+                      </button>
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {permissionUsers.length === 0 ? (
+                        <p className="text-xs text-slate-500">
+                          Aun no hay usuarios con permiso.
+                        </p>
+                      ) : (
+                        permissionUsers.map((user) => (
+                          <div
+                            key={user.id}
+                            className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200/70 bg-white/80 px-3 py-2"
+                          >
+                            <div>
+                              <p className="text-sm font-semibold text-slate-800">
+                                {user.name ?? "Sin nombre"}
+                              </p>
+                              <p className="text-xs text-slate-500">{user.email}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRevokePermission(league.id, user.id)}
+                              disabled={permissionLoading}
+                              className="rounded-full border border-red-200 bg-red-50/60 px-3 py-1 text-[11px] font-semibold text-red-600 shadow-sm transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-70"
+                            >
+                              Quitar
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    {permissionError && (
+                      <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                        {permissionError}
+                      </p>
+                    )}
+                    {permissionMessage && (
+                      <p className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+                        {permissionMessage}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

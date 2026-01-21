@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "@/lib/auth";
+import { canManageLeague } from "@/lib/permissions";
 import { NextResponse } from "next/server";
 
 const resolveId = (request: Request, resolvedParams?: { id?: string }) => {
@@ -42,7 +43,8 @@ export async function GET(
     return NextResponse.json({ error: "Liga no encontrada" }, { status: 404 });
   }
 
-  if (session.user.role !== "ADMIN" && league.ownerId !== session.user.id) {
+  const canManage = await canManageLeague(session.user, leagueId, league.ownerId);
+  if (!canManage) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
@@ -78,7 +80,8 @@ export async function POST(
     return NextResponse.json({ error: "Liga no encontrada" }, { status: 404 });
   }
 
-  if (session.user.role !== "ADMIN" && league.ownerId !== session.user.id) {
+  const canManage = await canManageLeague(session.user, leagueId, league.ownerId);
+  if (!canManage) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 

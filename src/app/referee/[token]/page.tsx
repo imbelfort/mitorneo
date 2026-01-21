@@ -52,6 +52,7 @@ type LiveState = {
   setDurationSeconds?: number;
   setTimerSeconds?: number;
   setTimerRunning?: boolean;
+  pointScore?: { A?: string | null; B?: string | null };
   substitutions?: { A?: number; B?: number };
   minuteTimers?: { A?: number; B?: number };
   minuteRunning?: { A?: boolean; B?: boolean };
@@ -63,8 +64,16 @@ type LiveState = {
 type ScoreSet = { a: number; b: number };
 
 const DEFAULT_SET_MINUTES = 15;
+const TENNIS_POINT_OPTIONS = ["0", "15", "30", "40", "Adv"];
 
 const emptySet = (): ScoreSet => ({ a: 0, b: 0 });
+
+const normalizeTennisPoint = (value?: string | null) => {
+  if (!value) return "0";
+  const upper = value.toUpperCase();
+  if (upper === "AD" || upper === "ADV") return "Adv";
+  return value;
+};
 
 const buildTeamLabel = (team?: Registration | null) => {
   if (!team) return "Por definir";
@@ -123,6 +132,8 @@ export default function RefereeMatchPage() {
     DEFAULT_SET_MINUTES * 60
   );
   const [setTimerRunning, setSetTimerRunning] = useState(false);
+  const [pointScoreA, setPointScoreA] = useState("0");
+  const [pointScoreB, setPointScoreB] = useState("0");
   const [substitutions, setSubstitutions] = useState({ A: 0, B: 0 });
   const [minuteTimers, setMinuteTimers] = useState({ A: 60, B: 60 });
   const [minuteRunning, setMinuteRunning] = useState({ A: false, B: false });
@@ -165,6 +176,12 @@ export default function RefereeMatchPage() {
     return sportName.toLowerCase().includes("fronton");
   }, [match?.category?.sport?.name]);
 
+  const isTennisLike = useMemo(() => {
+    const sportName = match?.category?.sport?.name ?? "";
+    const normalized = sportName.toLowerCase();
+    return normalized.includes("tenis") || normalized.includes("padel");
+  }, [match?.category?.sport?.name]);
+
   const teamPlayersA = useMemo(() => {
     const team = match?.teamA;
     if (!team) return [] as Player[];
@@ -205,6 +222,8 @@ export default function RefereeMatchPage() {
       setSetDurationMinutes(Math.max(1, Math.round(setSeconds / 60)));
       setSetTimerSeconds(state.setTimerSeconds ?? setSeconds);
       setSetTimerRunning(Boolean(state.setTimerRunning));
+      setPointScoreA(normalizeTennisPoint(state.pointScore?.A));
+      setPointScoreB(normalizeTennisPoint(state.pointScore?.B));
       setSubstitutions({
         A: state.substitutions?.A ?? 0,
         B: state.substitutions?.B ?? 0,
@@ -302,6 +321,12 @@ export default function RefereeMatchPage() {
     setDurationSeconds: Math.max(60, setDurationMinutes * 60),
     setTimerSeconds,
     setTimerRunning,
+    pointScore: isTennisLike
+      ? {
+          A: pointScoreA,
+          B: pointScoreB,
+        }
+      : undefined,
     substitutions,
     minuteTimers,
     minuteRunning,
@@ -599,6 +624,48 @@ export default function RefereeMatchPage() {
                   </div>
                 ) : (
                   <>
+                    {isTennisLike && (
+                      <div className="mt-6 grid gap-3 rounded-3xl border border-white/10 bg-slate-950/70 p-4 md:grid-cols-2">
+                        <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-3">
+                          <p className="text-xs uppercase tracking-[0.3em] text-slate-500">
+                            Puntos {teamALabel}
+                          </p>
+                          <select
+                            value={pointScoreA}
+                            onChange={(e) => {
+                              setPointScoreA(e.target.value);
+                              setAutoSaveTick((prev) => prev + 1);
+                            }}
+                            className="mt-3 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/30"
+                          >
+                            {TENNIS_POINT_OPTIONS.map((value) => (
+                              <option key={`point-a-${value}`} value={value}>
+                                {value}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-3">
+                          <p className="text-xs uppercase tracking-[0.3em] text-slate-500">
+                            Puntos {teamBLabel}
+                          </p>
+                          <select
+                            value={pointScoreB}
+                            onChange={(e) => {
+                              setPointScoreB(e.target.value);
+                              setAutoSaveTick((prev) => prev + 1);
+                            }}
+                            className="mt-3 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/30"
+                          >
+                            {TENNIS_POINT_OPTIONS.map((value) => (
+                              <option key={`point-b-${value}`} value={value}>
+                                {value}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    )}
                     <div className="mt-6 flex flex-wrap gap-2">
                   {sets.map((set, index) => (
                     <button

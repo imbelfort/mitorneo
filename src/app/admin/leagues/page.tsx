@@ -19,12 +19,41 @@ export default async function LeaguesAdminPage() {
 
   const isAdmin = session.user.role === "ADMIN";
 
+  const includePermissions =
+    session.user.role === "ADMIN"
+      ? {}
+      : {
+          permissions: {
+            where: { userId: session.user.id },
+            select: { userId: true },
+          },
+        };
+
   const leagues = await prisma.league.findMany({
+    where:
+      session.user.role === "ADMIN"
+        ? undefined
+        : {
+            OR: [
+              { ownerId: session.user.id },
+              { permissions: { some: { userId: session.user.id } } },
+            ],
+          },
     orderBy: { name: "asc" },
     include: {
       seasons: { orderBy: { startDate: "desc" } },
+      ...includePermissions,
     },
   });
+
+  const formattedLeagues = leagues.map((league) => ({
+    ...league,
+    canEdit:
+      isAdmin ||
+      league.ownerId === session.user.id ||
+      (Array.isArray((league as { permissions?: unknown[] }).permissions) &&
+        (league as { permissions?: unknown[] }).permissions!.length > 0),
+  }));
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-slate-50 px-6 py-12">
@@ -61,7 +90,7 @@ export default async function LeaguesAdminPage() {
           </p>
           <div className="mt-10">
             <LeaguesManager
-              initialLeagues={leagues}
+              initialLeagues={formattedLeagues}
               currentUserId={session.user.id}
               isAdmin={isAdmin}
             />

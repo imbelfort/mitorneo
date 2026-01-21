@@ -9,7 +9,11 @@ const isValidEnum = <T extends string>(value: string, allowed: T[]): value is T 
 const isRacquetballName = (name: string | null | undefined) => {
   if (!name) return false;
   const normalized = name.toLowerCase().replace(/\s+/g, "");
-  return normalized === "racquetball" || normalized === "raquetball";
+  return (
+    normalized === "racquetball" ||
+    normalized === "raquetball" ||
+    normalized === "squash"
+  );
 };
 
 export async function GET(request: Request) {

@@ -11,17 +11,45 @@ export async function GET() {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
+  const includePermissions =
+    session.user.role === "ADMIN"
+      ? {}
+      : {
+          permissions: {
+            where: { userId: session.user.id },
+            select: { userId: true },
+          },
+        };
+
   const leagues = await prisma.league.findMany({
-    where: session.user.role === "ADMIN" ? undefined : { ownerId: session.user.id },
+    where:
+      session.user.role === "ADMIN"
+        ? undefined
+        : {
+            OR: [
+              { ownerId: session.user.id },
+              { permissions: { some: { userId: session.user.id } } },
+            ],
+          },
     orderBy: { name: "asc" },
     include: {
       seasons: {
         orderBy: { startDate: "desc" },
       },
+      ...includePermissions,
     },
   });
 
-  return NextResponse.json({ leagues });
+  const formatted = leagues.map((league) => ({
+    ...league,
+    canEdit:
+      session.user.role === "ADMIN" ||
+      league.ownerId === session.user.id ||
+      (Array.isArray((league as { permissions?: unknown[] }).permissions) &&
+        (league as { permissions?: unknown[] }).permissions!.length > 0),
+  }));
+
+  return NextResponse.json({ leagues: formatted });
 }
 
 export async function POST(request: Request) {
